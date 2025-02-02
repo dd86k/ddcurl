@@ -169,7 +169,12 @@ class HTTPClient
     HTTPResponse get(string path) // TODO: get parameters
     {
         logTrace("GET %s", path);
+        
+        if (path == null)
+            throw new Exception("Path is empty");
+        
         CURL *curl = curl_easy_duphandle(curlMain);
+        
         return send(curl, path);
     }
     
@@ -177,6 +182,9 @@ class HTTPClient
     HTTPResponse post(string path, string payload)
     {
         logTrace("POST %s with payload of %u bytes", path, payload.length);
+        
+        if (path == null)
+            throw new Exception("Path is empty");
         
         CURL *curl = curl_easy_duphandle(curlMain);
         
@@ -240,11 +248,8 @@ private:
     
     HTTPResponse send(CURL *handle, string path)
     {
-        assert(baseUrl);
-        assert(path);
-        
-        string fullPath = baseUrl ~ path;
-        immutable(char)* full = toStringz( baseUrl ~ path );
+        string fullPath = baseUrl ? baseUrl ~ path : path;
+        immutable(char)* full = toStringz( fullPath );
         
         curl_easy_setopt(handle, CURLOPT_URL, full);
         //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
@@ -321,20 +326,33 @@ private:
 version (none)
 unittest
 {
+    import std.stdio;
     // 
-    HTTPClient client = new HTTPClient()
-        .setBaseUrl("https://jsonplaceholder.typicode.com")
+    scope HTTPClient client = new HTTPClient()
         .setUserAgent("Test/0.0.0");
     
-    HTTPResponse res = client.get("/todos/1");
+    HTTPResponse res = client.get(
+        "https://jsonplaceholder.typicode.com/todos/1"
+    );
     // {
     //   "userId": 1,
     //   "id": 1,
     //   "title": "delectus aut autem",
     //   "completed": false
     // }
-    writeln("test1: ", res.text);
+    writeln("Test: GET /todos/1\n", res.text);
     
+    client.setBaseUrl("https://jsonplaceholder.typicode.com");
+    res = client.get("/todos/2");
+    // {
+    //   "userId": 1,
+    //   "id": 2,
+    //   "title": "quis ut nam facilis et officia qui",
+    //   "completed": false
+    // }
+    writeln("Test: GET /todos/2\n", res.text);
+    
+    /*
     res = client.post("/posts",
         "title",    "test",
         "body",     "dd",
@@ -347,4 +365,5 @@ unittest
     //   "userId": 1
     // }
     writeln("test2: ", res.text);
+    */
 }
