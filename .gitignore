@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/ddcurl
+ddcurl.so
+ddcurl.dylib
+ddcurl.dll
+ddcurl.a
+ddcurl.lib
+ddcurl-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst
+*.json
