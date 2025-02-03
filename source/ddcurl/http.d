@@ -134,38 +134,73 @@ class HTTPClient
             throw new Exception("curl_easy_init failed");
     }
     
+    /// Set CURL's verbose flag.
+    /// Params: verbose = When enabled, CURL outputs information via stderr.
+    typeof(this) setVerbose(bool verbose)
+    {
+        curlVerbose = cast(long)verbose;
+        return this;
+    }
+    
+    /// Set a base URL that will be used in all future requests.
+    /// Params:
+    ///   base = Prefix, including protocol and domain
     typeof(this) setBaseUrl(string base)
     {
         baseUrl = base;
         return this;
     }
     
+    /// Set the user-agent string that will be used in all future requests.
+    /// Params:
+    ///   agent = User agent string.
     typeof(this) setUserAgent(string agent)
     {
         userAgent = agent;
         return this;
     }
     
-    // add default header to requests
+    /// Add header to all future requests.
+    /// Params:
+    ///   name = Field name.
+    ///   value = Value.
     typeof(this) addHeader(string name, string value)
     {
         headers[name] = value;
         return this;
     }
     // remove default header
+    /// Remove header from all future requests.
+    /// Params:
+    ///   name = Field name.
     typeof(this) removeHeader(string name)
     {
         headers.remove(name);
         return this;
     }
     
-    // Get header value
+    /// Set the maximum amount of redirections allowed.
+    /// Params:
+    ///   n = Number of redirections. -1 being infinite.
+    typeof(this) setMaxRedirects(long n)
+    {
+        curlMaxRedirects = n;
+        return this;
+    }
+    
+    /// Get the value set of a previously set header field name.
+    /// Params:
+    ///   name = Header field name.
+    /// Returns: String pointer. If null, header entry does not exist.
     string* getHeader(string name)
     {
         return name in headers;
     }
     
-    // perform a get request
+    /// Perform a GET request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    /// Returns: HTTP response.
     HTTPResponse get(string path) // TODO: get parameters
     {
         logTrace("GET %s", path);
@@ -174,11 +209,19 @@ class HTTPClient
             throw new Exception("Path is empty");
         
         CURL *curl = curl_easy_duphandle(curlMain);
+        if (curl == null)
+            throw new Exception("curl_easy_duphandle returned null");
         
         return send(curl, path);
     }
     
-    // perform a post request with an associative array payload
+    /// Perform a POST request.
+    ///
+    /// Best used with HTTPPostData to help with encoding POST HTML forms.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    ///   payload = Payload. Can be empty.
+    /// Returns: HTTP response.
     HTTPResponse post(string path, string payload)
     {
         logTrace("POST %s with payload of %u bytes", path, payload.length);
@@ -187,17 +230,23 @@ class HTTPClient
             throw new Exception("Path is empty");
         
         CURL *curl = curl_easy_duphandle(curlMain);
+        if (curl == null)
+            throw new Exception("curl_easy_duphandle returned null");
+        
+        curl_easy_setopt(curl, CURLOPT_POST, 1L);
         
         // Now specify the POST data
         if (payload)
         {
-            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            // NOTE: Documentation say that for -1 (default), strlen is used.
+            //       But the example does strlen() for CURLOPT_POSTFIELDSIZE.
+            //       The example for CURLOPT_POSTFIELDSIZE_LARGE does not.
+            //       Let's trust the doc and assume it's same to do this.
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cast(long)payload.length);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, toStringz( payload ));
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.ptr );
         }
         else
         {
-            curl_easy_setopt(curl, CURLOPT_POST, 1L);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
         }
         
@@ -232,11 +281,6 @@ class HTTPClient
     }
     */
     
-    void setVerbose(bool verbose)
-    {
-        curlVerbose = cast(long)verbose;
-    }
-    
 private:
     string userAgent;
     string baseUrl;
@@ -244,16 +288,17 @@ private:
     
     CURL *curlMain;
     long curlVerbose;
+    long curlMaxRedirects = 5;
     MemoryBuffer memory;
     
     HTTPResponse send(CURL *handle, string path)
     {
-        string fullPath = baseUrl ? baseUrl ~ path : path;
-        immutable(char)* full = toStringz( fullPath );
+        scope string fullPath = baseUrl ? baseUrl ~ path : path;
+        scope immutable(char)* full = toStringz( fullPath );
         
         curl_easy_setopt(handle, CURLOPT_URL, full);
         //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
-        curl_easy_setopt(handle, CURLOPT_MAXREDIRS, 5L);
+        curl_easy_setopt(handle, CURLOPT_MAXREDIRS, curlMaxRedirects);
         curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE, 1L);
         curl_easy_setopt(handle, CURLOPT_VERBOSE, curlVerbose);
         
