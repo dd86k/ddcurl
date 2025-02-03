@@ -28,6 +28,11 @@ struct MemoryBuffer
     size_t bufsize;
     size_t index;
     
+    ~this()
+    {
+        close();
+    }
+    
     void reset()
     {
         index = 0;
@@ -49,13 +54,11 @@ struct MemoryBuffer
         bufsize = newsize;
     }
     
-    /*
     void close()
     {
         if (buffer) free(buffer);
         buffer = null;
     }
-    */
     
     string toString() const
     {
