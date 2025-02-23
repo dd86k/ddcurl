@@ -182,12 +182,30 @@ class HTTPClient
         return this;
     }
     
+    /// Set peer verification option.
+    /// Params:
+    ///   v = True to perform peer verification.
+    typeof(this) setVerifyPeers(bool v)
+    {
+        curlVerifyPeers = cast(long)v;
+        return this;
+    }
+    
     /// Set the maximum amount of redirections allowed.
     /// Params:
     ///   n = Number of redirections. -1 being infinite.
     typeof(this) setMaxRedirects(long n)
     {
         curlMaxRedirects = n;
+        return this;
+    }
+    
+    /// Set the timeout.
+    /// Params:
+    ///   ms = Timeout in milliseconds. 0 for no timeouts.
+    typeof(this) setTimeout(long ms)
+    {
+        curlTimeoutMs = ms;
         return this;
     }
     
@@ -292,6 +310,8 @@ private:
     CURL *curlMain;
     long curlVerbose;
     long curlMaxRedirects = 5;
+    long curlTimeoutMs;
+    long curlVerifyPeers = 1;
     MemoryBuffer memory;
     
     HTTPResponse send(CURL *handle, string path)
@@ -301,12 +321,13 @@ private:
         
         curl_easy_setopt(handle, CURLOPT_URL, full);
         //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
-        curl_easy_setopt(handle, CURLOPT_MAXREDIRS, curlMaxRedirects);
-        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE, 1L);
-        curl_easy_setopt(handle, CURLOPT_VERBOSE, curlVerbose);
         
-        // #ifdef SKIP_PEER_VERIFICATION
-        curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+        // Set options
+        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(handle, CURLOPT_MAXREDIRS,     curlMaxRedirects);
+        curl_easy_setopt(handle, CURLOPT_VERBOSE,       curlVerbose);
+        curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS,    curlTimeoutMs);
         
         // Set user pointer
         memory.reset(); // reset index
