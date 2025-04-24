@@ -3,12 +3,12 @@ docs.json
 __dummy.html
 docs/
 /ddcurl
-ddcurl.so
-ddcurl.dylib
-ddcurl.dll
-ddcurl.a
-ddcurl.lib
 ddcurl-test-*
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
 *.exe
 *.pdb
 *.o
