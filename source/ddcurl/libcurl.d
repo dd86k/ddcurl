@@ -206,11 +206,13 @@ private enum
     CURLOPTTYPE_VALUES          = CURLOPTTYPE_LONG,
 }
 
+alias CURLoption = int;
+
 // #define CURLOPT(na,t,nu) na = t + nu
-template CURLOPT(int t, int nu) { enum CURLOPT = t + nu; }
+template CURLOPT(int t, int nu) { enum CURLoption CURLOPT = t + nu; }
+// #define CURLOPTDEPRECATED(na,t,nu,v,m) na CURL_DEPRECATED(v,m) = t + nu
 
 // TODO: alias #define CURLOPT_PROGRESSDATA CURLOPT_XFERINFODATA
-alias CURLoption = int;
 enum : CURLoption
 {
     CURLOPT_WRITEDATA           = CURLOPT!(CURLOPTTYPE_CBPOINT, 1),
@@ -507,6 +509,7 @@ __gshared
     // CURL *curl_easy_duphandle(CURL *handle);
     CURL* function(CURL *handle) curl_easy_duphandle;
     // CURLcode curl_easy_setopt(CURL *handle, CURLoption option, parameter);
+    extern (C)
     CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
     // CURLcode curl_easy_perform(CURL *easy_handle);
     CURLcode function(CURL *easy_handle) curl_easy_perform;
