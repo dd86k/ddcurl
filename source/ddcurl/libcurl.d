@@ -516,6 +516,7 @@ __gshared
     // void curl_easy_cleanup(CURL *handle);
     void function(CURL *handle) curl_easy_cleanup;
     // CURLcode curl_easy_getinfo(CURL *curl, CURLINFO info, ...);
+    extern (C)
     CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
     
     // CURLcode curl_ws_recv(CURL *curl, void *buffer, size_t buflen,
