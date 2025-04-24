@@ -3,6 +3,26 @@ module ddcurl.libcurl;
 
 import std.string;
 import ddloader;
+import ddlogger;
+
+class CurlEasyException : Exception
+{
+    this(CURLcode code, string curlfunc,
+        string _file = __FILE__, size_t _line = __LINE__)
+    {
+        curlCode = code;
+        curlFunction = curlfunc;
+        string em = curlErrorMessage(code);
+        logError("%s: (%d) %s", curlfunc, code, em);
+        super(em);
+        
+        file = _file;
+        line = _line;
+    }
+    
+    string curlFunction;
+    CURLcode curlCode;
+}
 
 //
 // libcurl interface
@@ -23,8 +43,8 @@ else version (Posix)
     ];
 }
 
-struct CURL {}
-struct curl_slist {}
+struct CURL;
+struct curl_slist;
 
 alias curl_off_t = long;
 
@@ -467,19 +487,10 @@ enum
     CURLWS_PONG       = 1 << 6,
 }
 
-private __gshared
-{
-    DynamicLibrary libcurl;
-}
-
-__gshared extern (C)
+__gshared
 {
     // char *curl_version();
     const(char)* function() curl_version;
-    // 
-    //const(char)* function(CURL*) curl_error;
-    // const char *curl_easy_strerror(CURLcode);
-    const(char)* function(CURLcode) curl_easy_strerror;
     
     // CURLcode curl_global_init(long flags);
     CURLcode function(long flags) curl_global_init;
@@ -491,6 +502,8 @@ __gshared extern (C)
     
     // CURL *curl_easy_init();
     CURL* function() curl_easy_init;
+    // const char *curl_easy_strerror(CURLcode);
+    const(char)* function(CURLcode) curl_easy_strerror;
     // CURL *curl_easy_duphandle(CURL *handle);
     CURL* function(CURL *handle) curl_easy_duphandle;
     // CURLcode curl_easy_setopt(CURL *handle, CURLoption option, parameter);
@@ -519,12 +532,17 @@ __gshared extern (C)
         uint flags) curl_ws_send;
 }
 
+private __gshared
+{
+    DynamicLibrary libcurl;
+}
+
 void curlLoad()
 {
     if (libcurl.handle) return;
     
     libcurl = libraryLoad(curlname);
-    libraryBind(libcurl, cast(void**)&curl_version,    "curl_version");
+    libraryBind(libcurl, cast(void**)&curl_version,        "curl_version");
     
     libraryBind(libcurl, cast(void**)&curl_global_init,    "curl_global_init");
     
@@ -548,7 +566,9 @@ void curlLoad()
     {
     }
     
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (code)
+        throw new CurlEasyException(code, "curl_global_init");
 }
 
 string curlErrorMessage(CURLcode code)
