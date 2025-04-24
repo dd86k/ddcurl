@@ -4,6 +4,7 @@ module ddcurl.websocket;
 import core.stdc.stdlib : malloc, realloc, free;
 import core.stdc.string : memcpy, strerror;
 import core.stdc.errno  : errno;
+import core.stdc.config : c_long;
 import core.thread;
 import std.format;
 import std.string;
@@ -130,6 +131,12 @@ class WebSocketClient
         return this;
     }
     
+    typeof(this) setVerbose(bool v)
+    {
+        curlVerbose = cast(long)v;
+        return this;
+    }
+    
     // ws://, wss://
     void connect(string url, void delegate(ref WebSocketConnection) dg)
     {
@@ -155,7 +162,9 @@ class WebSocketClient
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        code = curl_easy_setopt(curl, CURLOPT_VERBOSE, curlVerbose);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set headers
         curl_slist *slist_headers;
@@ -192,7 +201,8 @@ class WebSocketClient
     
 private:
     CURL *curl;
-    long curlVerifyPeers = 1;
+    c_long curlVerifyPeers = 1;
+    c_long curlVerbose;
 
     string[string] headers;
 }

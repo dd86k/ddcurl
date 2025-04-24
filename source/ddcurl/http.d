@@ -123,14 +123,14 @@ class HTTPClient
     ///   v = True to perform peer verification.
     typeof(this) setVerifyPeers(bool v)
     {
-        curlVerifyPeers = cast(long)v;
+        curlVerifyPeers = cast(c_long)v;
         return this;
     }
     
     /// Set the maximum amount of redirections allowed.
     /// Params:
     ///   n = Number of redirections. -1 being infinite.
-    typeof(this) setMaxRedirects(long n)
+    typeof(this) setMaxRedirects(int n)
     {
         curlMaxRedirects = n;
         return this;
@@ -255,10 +255,10 @@ private:
     string[string] headers;
     
     CURL *curlMain;
-    long curlVerbose;
-    long curlMaxRedirects = 5;
-    long curlTimeoutMs;
-    long curlVerifyPeers = 1;
+    c_long curlVerbose;
+    c_long curlMaxRedirects = 5;
+    c_long curlTimeoutMs;
+    c_long curlVerifyPeers = 1;
     MemoryBuffer memorybuf;
     
     HTTPResponse send(CURL *handle, string path)

@@ -1,6 +1,7 @@
 /// Implements C bindings for libcurl.
 module ddcurl.libcurl;
 
+import core.stdc.config : c_long;
 import std.string;
 import ddloader;
 import ddlogger;
@@ -495,7 +496,7 @@ __gshared
     const(char)* function() curl_version;
     
     // CURLcode curl_global_init(long flags);
-    CURLcode function(long flags) curl_global_init;
+    CURLcode function(c_long flags) curl_global_init;
     
     // struct curl_slist *curl_slist_append(struct curl_slist *list, const char *string);
     curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
