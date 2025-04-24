@@ -3,6 +3,7 @@ module ddcurl.http;
 
 import core.stdc.stdlib : realloc, free;
 import core.stdc.string : memcpy;
+import core.stdc.config : c_long;
 import std.outbuffer;
 import std.uri;
 import std.format;
@@ -131,10 +132,6 @@ class HTTPClient
     this()
     {
         curlLoad(); // Depends on libcurl
-        
-        curlMain = curl_easy_init();
-        if (curlMain == null)
-            throw new Exception("curl_easy_init failed");
     }
     
     /// Set CURL's verbose flag.
@@ -224,14 +221,14 @@ class HTTPClient
     /// Returns: HTTP response.
     HTTPResponse get(string path) // TODO: get parameters
     {
-        logTrace("GET %s", path);
+        logDebugging("GET %s", path);
         
         if (path == null)
             throw new Exception("Path is empty");
         
-        CURL *curl = curl_easy_duphandle(curlMain);
+        CURL *curl = curl_easy_init();
         if (curl == null)
-            throw new Exception("curl_easy_duphandle returned null");
+            throw new Exception("curl_easy_init returned null");
         
         return send(curl, path);
     }
@@ -245,16 +242,19 @@ class HTTPClient
     /// Returns: HTTP response.
     HTTPResponse post(string path, string payload)
     {
-        logTrace("POST %s with payload of %u bytes", path, payload.length);
+        logDebugging("POST %s (%u bytes)", path, payload.length);
         
         if (path == null)
             throw new Exception("Path is empty");
         
-        CURL *curl = curl_easy_duphandle(curlMain);
+        CURL *curl = curl_easy_init();
         if (curl == null)
-            throw new Exception("curl_easy_duphandle returned null");
+            throw new Exception("curl_easy_init returned null");
         
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        CURLcode code = void;
+        code = curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Now specify the POST data
         if (payload)
@@ -263,12 +263,20 @@ class HTTPClient
             //       But the example does strlen() for CURLOPT_POSTFIELDSIZE.
             //       The example for CURLOPT_POSTFIELDSIZE_LARGE does not.
             //       Let's trust the doc and assume it's same to do this.
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cast(long)payload.length);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.ptr );
+            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cast(long)payload.length);
+            if (code)
+                throw new CurlEasyException(code, "curl_easy_setopt");
+            
+            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.ptr );
+            if (code)
+                throw new CurlEasyException(code, "curl_easy_setopt");
         }
         else
         {
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
+            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
+            if (code)
+                throw new CurlEasyException(code, "curl_easy_setopt");
+            
         }
         
         return send(curl, path);
@@ -316,25 +324,48 @@ private:
     
     HTTPResponse send(CURL *handle, string path)
     {
+        assert(handle);
+        assert(path);
+        
         scope string fullPath = baseUrl ? baseUrl ~ path : path;
+        logTrace("handle=%s path=%s", handle, fullPath);
+        
         scope immutable(char)* full = toStringz( fullPath );
         
-        curl_easy_setopt(handle, CURLOPT_URL, full);
+        CURLcode code = void;
+        
+        code = curl_easy_setopt(handle, CURLOPT_URL, full);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
         
         // Set options
-        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE, 1L);
-        curl_easy_setopt(handle, CURLOPT_MAXREDIRS,     curlMaxRedirects);
-        curl_easy_setopt(handle, CURLOPT_VERBOSE,       curlVerbose);
+        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE,  1L);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_easy_setopt(handle, CURLOPT_MAXREDIRS,      curlMaxRedirects);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_easy_setopt(handle, CURLOPT_VERBOSE,        curlVerbose);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
-        curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS,    curlTimeoutMs);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS,     curlTimeoutMs);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set user pointer
         memory.reset(); // reset index
         curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memory);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set read function
         curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &readResponse);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set headers
         curl_slist *slist_headers;
@@ -351,32 +382,39 @@ private:
             }
             
             curl_easy_setopt(handle, CURLOPT_HTTPHEADER, slist_headers);
+            if (code)
+                throw new CurlEasyException(code, "curl_easy_setopt");
         }
         
         // Set user agent
         if (userAgent)
-            curl_easy_setopt(handle, CURLOPT_USERAGENT, toStringz( userAgent ));
-        
-        // 
-        CURLcode code = curl_easy_perform(handle);
-        if (code)
         {
-            string em = curlErrorMessage(code);
-            logError("curl error: (%d) '%s' with '%s'", code, em, fullPath);
-            throw new Exception(em);
+            curl_easy_setopt(handle, CURLOPT_USERAGENT, toStringz( userAgent ));
+            if (code)
+                throw new CurlEasyException(code, "curl_easy_setopt");
         }
         
-        long response_code;
-        curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response_code);
+        // Perform request
+        code = curl_easy_perform(handle);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_perform");
         
-        HTTPResponse response = void;
-        response.code = cast(int)response_code;
-        response.text = memory.toString();
+        // Get response code
+        c_long response_code;
+        code = curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response_code);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_getinfo");
         
+        // Cleanup
         if (slist_headers)
             curl_slist_free_all(slist_headers);
-        
         curl_easy_cleanup(handle);
+        
+        // NOTE: memory buffer holds its own memory buffer
+        HTTPResponse response = HTTPResponse(
+            cast(int)response_code,
+            memory.toString()
+        );
         return response;
     }
     
