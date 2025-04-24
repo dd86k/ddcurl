@@ -44,7 +44,7 @@ struct WebSocketConnection
         {
             switch (code) {
             case CURLE_AGAIN:
-                static immutable Duration ws_sleep = 5.seconds;
+                static immutable Duration ws_sleep = 1.seconds;
                 logTrace("Socket not ready, sleeping for %s", ws_sleep);
                 Thread.sleep(ws_sleep);
                 goto Lread;
@@ -124,6 +124,12 @@ class WebSocketClient
         return this;
     }
     
+    typeof(this) setVerifyPeers(bool v)
+    {
+        curlVerifyPeers = cast(long)v;
+        return this;
+    }
+    
     // ws://, wss://
     void connect(string url, void delegate(ref WebSocketConnection) dg)
     {
@@ -135,10 +141,21 @@ class WebSocketClient
         if (curl == null)
             throw new Exception("curl_easy_init failed");
         
-        curl_easy_setopt(curl, CURLOPT_URL, toStringz( url ));
-        curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L); // WS style
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        CURLcode code = void;
+        
+        code = curl_easy_setopt(curl, CURLOPT_URL, toStringz( url ));
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        
+        code = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L); // WS style
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        
+        code = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        if (code)
+            throw new CurlEasyException(code, "curl_easy_setopt");
+        
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         
         // Set headers
         curl_slist *slist_headers;
@@ -157,18 +174,25 @@ class WebSocketClient
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist_headers);
         }
         
-        CURLcode code = curl_easy_perform(curl);
+        // Perform HTTP call with upgrade
+        code = curl_easy_perform(curl);
         if (code)
-            throw new Exception(curlErrorMessage(code));
+            throw new CurlEasyException(code, "curl_easy_perform");
         
+        // Call user delegate
         WebSocketConnection ws = WebSocketConnection(curl);
         dg(ws);
+        
+        // If we had headers, clear them
+        if (slist_headers)
+            curl_slist_free_all(slist_headers);
         
         curl_easy_cleanup(curl);
     }
     
 private:
     CURL *curl;
+    long curlVerifyPeers = 1;
 
     string[string] headers;
 }

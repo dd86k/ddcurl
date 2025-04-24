@@ -1,8 +1,6 @@
 /// High-level implementation of a HTTP client using libcurl.
 module ddcurl.http;
 
-import core.stdc.stdlib : realloc, free;
-import core.stdc.string : memcpy;
 import core.stdc.config : c_long;
 import std.outbuffer;
 import std.uri;
@@ -11,6 +9,7 @@ import std.string;
 import std.json;
 import std.concurrency;
 import ddcurl.libcurl;
+import ddcurl.utils;
 import ddlogger;
 
 immutable
@@ -21,66 +20,6 @@ immutable
 //
 // Basic HTTP client using libcurl
 //
-
-private
-struct MemoryBuffer
-{
-    void *buffer;
-    size_t bufsize;
-    size_t index;
-    
-    ~this()
-    {
-        close();
-    }
-    
-    void reset()
-    {
-        index = 0;
-    }
-    
-    void append(void *data, size_t size)
-    {
-        if (index + size >= bufsize)
-            resize(bufsize + (bufsize - index) + size);
-        memcpy(buffer + index, data, size);
-        index += size;
-    }
-    
-    void resize(size_t newsize)
-    {
-        buffer = realloc(buffer, newsize);
-        if (buffer == null)
-            throw new Exception("Failed to allocate memory buffer");
-        bufsize = newsize;
-    }
-    
-    void close()
-    {
-        if (buffer) free(buffer);
-        buffer = null;
-    }
-    
-    string toString() const
-    {
-        return (cast(immutable(char)*)buffer)[0..index];
-    }
-}
-unittest
-{
-    static immutable ubyte[3] data = [ 1, 2, 3 ];
-    MemoryBuffer mem;
-    mem.append(cast(void*)data.ptr, data.length);
-    mem.append(cast(void*)data.ptr, data.length);
-    assert(mem.bufsize == 6);
-    assert(mem.buffer);
-    assert((cast(ubyte*)mem.buffer)[0] == 1);
-    assert((cast(ubyte*)mem.buffer)[1] == 2);
-    assert((cast(ubyte*)mem.buffer)[2] == 3);
-    assert((cast(ubyte*)mem.buffer)[3] == 1);
-    assert((cast(ubyte*)mem.buffer)[4] == 2);
-    assert((cast(ubyte*)mem.buffer)[5] == 3);
-}
 
 class HTTPPostData
 {
@@ -320,7 +259,7 @@ private:
     long curlMaxRedirects = 5;
     long curlTimeoutMs;
     long curlVerifyPeers = 1;
-    MemoryBuffer memory;
+    MemoryBuffer memorybuf;
     
     HTTPResponse send(CURL *handle, string path)
     {
@@ -357,8 +296,8 @@ private:
             throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set user pointer
-        memory.reset(); // reset index
-        curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memory);
+        memorybuf.reset();
+        curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memorybuf);
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         
@@ -413,12 +352,11 @@ private:
         // NOTE: memory buffer holds its own memory buffer
         HTTPResponse response = HTTPResponse(
             cast(int)response_code,
-            memory.toString()
+            memorybuf.toString()
         );
         return response;
     }
     
-    extern (C)
     static
     size_t readResponse(void *content, size_t size, size_t nmemb, void *userp)
     {
