@@ -26,9 +26,7 @@ struct MemoryBuffer
         logTrace("data=%s size=%u", data, size);
         if (len + size >= capacity)
         {
-            size_t pr = capacity << 1; // *2
-            assert(pr > capacity, "assert(pr > size)");
-            resize(pr);
+            resize(capacity ? capacity << 1 : 2048); // * 2
         }
         memcpy(buffer + len, data, size);
         len += size;
