@@ -158,12 +158,12 @@ class HTTPClient
     /// Params:
     ///   path = Full or postfix URL path.
     /// Returns: HTTP response.
-    HTTPResponse get(string path) // TODO: get parameters
+    HTTPResponse get(string path = null) // TODO: get parameters
     {
         logDebugging("GET %s", path);
         
-        if (path == null)
-            throw new Exception("Path is empty");
+        if (path == null && baseUrl == null)
+            throw new Exception("Path is empty and BaseURL is unset");
         
         CURL *curl = curl_easy_init();
         if (curl == null)
@@ -179,12 +179,12 @@ class HTTPClient
     ///   path = Full or postfix URL path.
     ///   payload = Payload. Can be empty.
     /// Returns: HTTP response.
-    HTTPResponse post(string path, string payload)
+    HTTPResponse post(string path = null, string payload = null)
     {
         logDebugging("POST %s (%u bytes)", path, payload.length);
         
-        if (path == null)
-            throw new Exception("Path is empty");
+        if (path == null && baseUrl == null)
+            throw new Exception("Path is empty and BaseURL is unset");
         
         CURL *curl = curl_easy_init();
         if (curl == null)
@@ -215,7 +215,6 @@ class HTTPClient
             code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
             if (code)
                 throw new CurlEasyException(code, "curl_easy_setopt");
-            
         }
         
         return send(curl, path);
@@ -264,12 +263,24 @@ private:
     HTTPResponse send(CURL *handle, string path)
     {
         assert(handle);
-        assert(path);
         
-        scope string fullPath = baseUrl ? baseUrl ~ path : path;
-        logTrace("handle=%s path=%s", handle, fullPath);
+        // path: Full path assumed
+        // baseUrl: Full path assumed
+        // baseUrl+path: 
         
-        scope immutable(char)* full = toStringz( fullPath );
+        scope string fullpath;
+        if (baseUrl && path)
+            fullpath = baseUrl ~ path;
+        else if (baseUrl)
+            fullpath = baseUrl;
+        else if (path)
+            fullpath = path;
+        else
+            throw new Exception("Path is empty and BaseURL is unset");
+        
+        logTrace("handle=%s path=%s", handle, fullpath);
+        
+        scope immutable(char)* full = toStringz( fullpath );
         
         CURLcode code = void;
         
