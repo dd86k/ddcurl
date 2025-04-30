@@ -7,17 +7,17 @@ Mostly for personal use.
 | Name | Depends on | Notes |
 |---|---|---|
 | HTTPClient | libcurl | |
-| WebSocketClient | libcurl (>=7.86+WS or >=8.11) | |
+| WebSocketClient | libcurl | |
 
 ## libcurl
 
-While libcurl starting with version 7.86 implements WebSockets, some operating
-systems may not include support for WebSocket, since it is marked as experimental
-and it is only an opt-in compile option.
+WebSocket support in libcurl started with version 7.86, marked as experimental.
+Most operating systems does not include it when compiling, and thus could be unavaialble.
 
 Version 8.11 made WebSocket support official, and should have it available by default.
 
 Those that were checked are listed below. libcurl versions below 7.86 are not listed.
+WebSocket support will be listed in `curl --version`.
 
 Last checked: 2025-04-26
 
@@ -35,7 +35,7 @@ Last checked: 2025-04-26
 | FreeBSD | 14 | 8.12.1 | yes |
 | NetBSD | 9 | 8.8.0 | no |
 | NetBSD | 10 | 8.12.1 | yes |
-| OpenBSD | 10 | 8.9.0 | no |
+| OpenBSD | 7.7 | 8.13.0 | yes |
 | OpenSUSE Leap | 15.6 | 8.6.0 | no |
 | OpenSUSE Tumbleweed | | 8.13.0 | yes |
 | Rocky Linux | 9 | 7.76.1 | no |
