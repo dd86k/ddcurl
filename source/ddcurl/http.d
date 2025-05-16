@@ -275,6 +275,7 @@ private:
     HTTPResponse send(CURL *handle, string path)
     {
         assert(handle);
+        assert(path);
         
         logTrace("handle=%s path=%s", handle, path);
         
@@ -362,13 +363,13 @@ private:
         );
         return response;
     }
-    
 }
 
 // "[...] this callback gets called many times and each invoke delivers"
 // "another chunk of data. ptr points to the delivered data, and the size"
 // "of that data is nmemb; size is always 1."
 // Observed: nmemb is always 1, size varies.
+private
 extern (C) // ABI issues otherwise
 size_t readResponse(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
@@ -380,49 +381,4 @@ size_t readResponse(void *ptr, size_t size, size_t nmemb, void *userdata)
     HTTPClient client = cast(HTTPClient)userdata;
     client.memorybuf.append(ptr, realsize);
     return realsize;
-}
-
-//version (none)
-unittest
-{
-    import std.stdio;
-    HTTPClient client = new HTTPClient()
-        .setUserAgent("Test/0.0.0");
-    
-    // TODO: curl-like client (subpackage) to test links instead of hardcoded URLs
-    HTTPResponse res = client.get(
-        "https://jsonplaceholder.typicode.com/todos/1"
-    );
-    // {
-    //   "userId": 1,
-    //   "id": 1,
-    //   "title": "delectus aut autem",
-    //   "completed": false
-    // }
-    writeln("Test: GET /todos/1\n", res.text);
-    
-    client.setBaseUrl("https://jsonplaceholder.typicode.com");
-    res = client.get("/todos/2");
-    // {
-    //   "userId": 1,
-    //   "id": 2,
-    //   "title": "quis ut nam facilis et officia qui",
-    //   "completed": false
-    // }
-    writeln("Test: GET /todos/2\n", res.text);
-    
-    /*
-    res = client.post("/posts",
-        "title",    "test",
-        "body",     "dd",
-        "userId",   "1",
-    );
-    // {
-    //   "id": 101,
-    //   "title": "foo",
-    //   "body": "bar",
-    //   "userId": 1
-    // }
-    writeln("test2: ", res.text);
-    */
 }

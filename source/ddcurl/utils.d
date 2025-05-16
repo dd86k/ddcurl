@@ -7,10 +7,10 @@ import ddlogger;
 package
 struct MemoryBuffer
 {
+    enum INITCAP = 1024; /// Initial capacity if not yet sized
     void *buffer;
     size_t capacity;
-    size_t len;
-    enum INITCAP = 1024; /// Initial capacity if not yet sized
+    size_t length;
     
     ~this()
     {
@@ -19,7 +19,7 @@ struct MemoryBuffer
     
     void reset()
     {
-        len = 0;
+        length = 0;
     }
     
     void append(void *data, size_t size)
@@ -33,18 +33,20 @@ struct MemoryBuffer
         if (buffer == null)
             resize(INITCAP);
         
-        if (len + size >= capacity)
+        if (length + size >= capacity)
         {
-            resize(capacity ? capacity << 1 : INITCAP); // * 2
+            size_t newcap = length + size;
+            assert(newcap >= size, "new capacity cannot hold size"); // overflow
+            resize(newcap);
         }
         
-        memcpy(buffer + len, data, size);
-        len += size;
+        memcpy(buffer + length, data, size);
+        length += size;
     }
     
     void resize(size_t newsize)
     {
-        logTrace(".buffer=%s .capacity=%u .len=%u newsize=%u", buffer, capacity, len, newsize);
+        logTrace(".buffer=%s .cap=%u .len=%u newsize=%u", buffer, capacity, length, newsize);
         void *temp = realloc(buffer, newsize);
         if (temp == null)
             throw new Exception("Failed to allocate memory buffer");
@@ -60,16 +62,17 @@ struct MemoryBuffer
     
     string toString() const
     {
-        return (cast(immutable(char)*)buffer)[0..len];
+        return (cast(immutable(char)*)buffer)[0..length];
     }
 }
+// Initial append
 unittest
 {
     static immutable ubyte[3] data = [ 1, 2, 3 ];
     MemoryBuffer mem;
     mem.append(cast(void*)data.ptr, data.length);
     mem.append(cast(void*)data.ptr, data.length);
-    assert(mem.len == 6);
+    assert(mem.length == 6);
     assert(mem.capacity >= 6);
     assert(mem.buffer);
     ubyte *p = cast(ubyte*)mem.buffer;
@@ -80,6 +83,7 @@ unittest
     assert(p[4] == 2);
     assert(p[5] == 3);
 }
+// Test errors
 unittest
 {
     MemoryBuffer mem;
@@ -98,15 +102,18 @@ unittest
     }
     catch (Exception ex) {}
 }
+// Test realloc
 unittest
 {
     ubyte[] data = new ubyte[157];
     data[] = 0;
     
+    enum INIT = 60;
+    
     MemoryBuffer mem;
-    mem.reset();
+    mem.resize(INIT);
     mem.append(cast(void*)data.ptr, data.length);
     
-    assert(mem.capacity >= mem.INITCAP);
-    assert(mem.len == data.length);
+    assert(mem.capacity > 60);
+    assert(mem.length == data.length);
 }
