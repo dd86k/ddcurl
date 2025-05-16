@@ -492,45 +492,28 @@ enum
 
 __gshared
 {
-    // char *curl_version();
     const(char)* function() curl_version;
     
-    // CURLcode curl_global_init(long flags);
     CURLcode function(c_long flags) curl_global_init;
     
-    // struct curl_slist *curl_slist_append(struct curl_slist *list, const char *string);
+    extern (C) // DMD really needs this extern for this function... DON'T ASK WHY
     curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
-    // void curl_slist_free_all(struct curl_slist *list);
     void function(curl_slist *list) curl_slist_free_all;
     
-    // CURL *curl_easy_init();
     CURL* function() curl_easy_init;
-    // const char *curl_easy_strerror(CURLcode);
     const(char)* function(CURLcode) curl_easy_strerror;
-    // CURL *curl_easy_duphandle(CURL *handle);
     CURL* function(CURL *handle) curl_easy_duphandle;
-    // CURLcode curl_easy_setopt(CURL *handle, CURLoption option, parameter);
     extern (C)
     CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
-    // CURLcode curl_easy_perform(CURL *easy_handle);
     CURLcode function(CURL *easy_handle) curl_easy_perform;
-    // void curl_easy_cleanup(CURL *handle);
     void function(CURL *handle) curl_easy_cleanup;
-    // CURLcode curl_easy_getinfo(CURL *curl, CURLINFO info, ...);
     extern (C)
     CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
     
-    // CURLcode curl_ws_recv(CURL *curl, void *buffer, size_t buflen,
-    //                       size_t *recv,
-    //                       const struct curl_ws_frame **metap);
     CURLcode function(CURL *curl,
         void *buffer, size_t buflen,
         size_t *recv, curl_ws_frame **metap) curl_ws_recv;
     
-    // CURLcode curl_ws_send(CURL *curl, const void *buffer,
-    //                       size_t buflen, size_t *sent,
-    //                       curl_off_t fragsize,
-    //                       unsigned int flags);
     CURLcode function(CURL *curl, const void *buffer,
         size_t buflen, size_t *sent,
         curl_off_t fragsize,

@@ -312,20 +312,24 @@ private:
             throw new CurlEasyException(code, "curl_easy_setopt");
         
         // Set headers
-        curl_slist *slist_headers;
+        curl_slist *curl_headers;
         if (headers.length)
         {
             foreach (key, value; headers)
             {
-                char[256] buffer = void;
-                char[] header = sformat(buffer, "%s: %s", key, value);
+                string hdr = format("%s: %s", key, value);
                 
-                slist_headers = curl_slist_append(slist_headers, toStringz( header ));
-                if (slist_headers == null)
+                curl_slist *temp = curl_slist_append(curl_headers, hdr.toStringz());
+                if (temp == null)
+                {
+                    curl_slist_free_all(curl_headers);
                     throw new Exception("curl_slist_append failed");
+                }
+                
+                curl_headers = temp;
             }
             
-            curl_easy_setopt(handle, CURLOPT_HTTPHEADER, slist_headers);
+            curl_easy_setopt(handle, CURLOPT_HTTPHEADER, curl_headers);
             if (code)
                 throw new CurlEasyException(code, "curl_easy_setopt");
         }
@@ -351,8 +355,8 @@ private:
             throw new CurlEasyException(code, "curl_easy_getinfo");
         
         // Cleanup
-        if (slist_headers)
-            curl_slist_free_all(slist_headers);
+        if (curl_headers)
+            curl_slist_free_all(curl_headers);
         curl_easy_cleanup(handle);
         
         // Make up response, memory buffer holds its own memory buffer that
