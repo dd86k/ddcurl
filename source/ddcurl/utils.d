@@ -7,7 +7,8 @@ import ddlogger;
 package
 struct MemoryBuffer
 {
-    enum INITCAP = 1024; /// Initial capacity if not yet sized
+    /// Initial capacity, if not yet resized.
+    enum INITCAP = 2048;
     void *buffer;
     size_t capacity;
     size_t length;
@@ -20,6 +21,12 @@ struct MemoryBuffer
     void reset()
     {
         length = 0;
+        // This helps long-lived sessions (e.g., client services)
+        // when a client previously receives a much larger response than
+        // the initial capacity. Plus, when having small replies, there's
+        // no point in unconditionally resizing the buffer, which could be
+        // wasteful towards realloc.
+        if (length > INITCAP) resize(INITCAP);
     }
     
     void append(void *data, size_t size)
@@ -30,10 +37,12 @@ struct MemoryBuffer
             throw new Exception("data pointer null");
         if (size == 0)
             return;
-        if (buffer == null)
-            resize(INITCAP);
         
-        if (length + size >= capacity)
+        // If the current capacity cannot hold the new size,
+        // resize it to the current length+size. Otherwise,
+        // even when the capacity is zero, it will be allocated
+        // to size (for the first allocation).
+        if (length + size > capacity)
         {
             size_t newcap = length + size;
             assert(newcap >= size, "new capacity cannot hold size"); // overflow
