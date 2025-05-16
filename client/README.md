@@ -1,0 +1,1 @@
+Example client used for integration testing.

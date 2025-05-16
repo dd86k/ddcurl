@@ -6,3 +6,5 @@ license "ISC"
 
 dependency "ddloader" repository="git+https://github.com/dd86k/ddloader.git" version="c3eb54d31a17e63a7722f8449033ce13764b7636"
 dependency "ddlogger" repository="git+https://github.com/dd86k/ddlogger.git" version="99a077a599c6d56e4fdeefb8b5d5002620cd228f"
+
+subPackage "client"

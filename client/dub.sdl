@@ -1,0 +1,6 @@
+name "client"
+
+targetPath ".."
+targetType "executable"
+
+dependency "ddcurl" path=".." version="*"
