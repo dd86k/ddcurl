@@ -10,6 +10,7 @@ struct MemoryBuffer
     void *buffer;
     size_t capacity;
     size_t len;
+    enum INITCAP = 1024; /// Initial capacity if not yet sized
     
     ~this()
     {
@@ -24,10 +25,19 @@ struct MemoryBuffer
     void append(void *data, size_t size)
     {
         logTrace("data=%s size=%u", data, size);
+        
+        if (data == null)
+            throw new Exception("data pointer null");
+        if (size == 0)
+            return;
+        if (buffer == null)
+            resize(INITCAP);
+        
         if (len + size >= capacity)
         {
-            resize(capacity ? capacity << 1 : 2048); // * 2
+            resize(capacity ? capacity << 1 : INITCAP); // * 2
         }
+        
         memcpy(buffer + len, data, size);
         len += size;
     }
@@ -35,9 +45,10 @@ struct MemoryBuffer
     void resize(size_t newsize)
     {
         logTrace(".buffer=%s .capacity=%u .len=%u newsize=%u", buffer, capacity, len, newsize);
-        buffer = realloc(buffer, newsize);
-        if (buffer == null)
+        void *temp = realloc(buffer, newsize);
+        if (temp == null)
             throw new Exception("Failed to allocate memory buffer");
+        buffer = temp;
         capacity = newsize;
     }
     
@@ -68,4 +79,34 @@ unittest
     assert(p[3] == 1);
     assert(p[4] == 2);
     assert(p[5] == 3);
+}
+unittest
+{
+    MemoryBuffer mem;
+    // Test null pointer
+    try
+    {
+        mem.append(null, 0);
+        assert(0); // should throw before reaching
+    }
+    catch (Exception ex) {}
+    
+    // Test zero size
+    try
+    {
+        mem.append(cast(void*)0x123456, 0); // should just return
+    }
+    catch (Exception ex) {}
+}
+unittest
+{
+    ubyte[] data = new ubyte[157];
+    data[] = 0;
+    
+    MemoryBuffer mem;
+    mem.reset();
+    mem.append(cast(void*)data.ptr, data.length);
+    
+    assert(mem.capacity >= mem.INITCAP);
+    assert(mem.len == data.length);
 }
