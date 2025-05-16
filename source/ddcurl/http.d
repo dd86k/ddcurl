@@ -160,16 +160,15 @@ class HTTPClient
     /// Returns: HTTP response.
     HTTPResponse get(string path = null) // TODO: get parameters
     {
-        logDebugging("GET %s", path);
+        string canon = canonicalPath(path);
         
-        if (path == null && baseUrl == null)
-            throw new Exception("Path is empty and BaseURL is unset");
+        logDebugging("GET %s", canon);
         
         CURL *curl = curl_easy_init();
         if (curl == null)
             throw new Exception("curl_easy_init returned null");
         
-        return send(curl, path);
+        return send(curl, canon);
     }
     
     /// Perform a POST request.
@@ -181,15 +180,15 @@ class HTTPClient
     /// Returns: HTTP response.
     HTTPResponse post(string path = null, string payload = null)
     {
-        logDebugging("POST %s (%u bytes)", path, payload.length);
+        string canon = canonicalPath(path);
         
-        if (path == null && baseUrl == null)
-            throw new Exception("Path is empty and BaseURL is unset");
+        logDebugging("POST %s (%u bytes)", canon, payload.length);
         
         CURL *curl = curl_easy_init();
         if (curl == null)
             throw new Exception("curl_easy_init returned null");
         
+        // Set POST option
         CURLcode code = void;
         code = curl_easy_setopt(curl, CURLOPT_POST, 1L);
         if (code)
@@ -210,14 +209,14 @@ class HTTPClient
             if (code)
                 throw new CurlEasyException(code, "curl_easy_setopt");
         }
-        else
+        else // Empty payload
         {
             code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
             if (code)
                 throw new CurlEasyException(code, "curl_easy_setopt");
         }
         
-        return send(curl, path);
+        return send(curl, canon);
     }
     
     // perform a post request with an associative array payload
@@ -256,41 +255,37 @@ private:
     CURL *curlMain;
     c_long curlVerbose;
     c_long curlMaxRedirects = 5;
-    c_long curlTimeoutMs;
+    c_long curlTimeoutMs = 10_000;
     c_long curlVerifyPeers = 1;
     MemoryBuffer memorybuf;
+    
+    // Get the actual full path
+    string canonicalPath(string suffix)
+    {
+        if (baseUrl && suffix) // BaseURL + Suffix = Full URL
+            return baseUrl ~ suffix;
+        else if (suffix) // Suffix only = Full URL
+            return suffix;
+        else if (baseUrl) // BaseUrl = Full URL
+            return baseUrl;
+        else // Neither is set
+            throw new Exception("Path is empty and BaseURL is unset");
+    }
     
     HTTPResponse send(CURL *handle, string path)
     {
         assert(handle);
         
-        // path: Full path assumed
-        // baseUrl: Full path assumed
-        // baseUrl+path: 
-        
-        scope string fullpath;
-        if (baseUrl && path)
-            fullpath = baseUrl ~ path;
-        else if (baseUrl)
-            fullpath = baseUrl;
-        else if (path)
-            fullpath = path;
-        else
-            throw new Exception("Path is empty and BaseURL is unset");
-        
-        logTrace("handle=%s path=%s", handle, fullpath);
-        
-        scope immutable(char)* full = toStringz( fullpath );
+        logTrace("handle=%s path=%s", handle, path);
         
         CURLcode code = void;
-        
-        code = curl_easy_setopt(handle, CURLOPT_URL, full);
+        code = curl_easy_setopt(handle, CURLOPT_URL, path.toStringz());
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
         
         // Set options
-        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE,  1L);
+        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE,  1L); // forgot what this fixes
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         curl_easy_setopt(handle, CURLOPT_MAXREDIRS,      curlMaxRedirects);
@@ -306,14 +301,12 @@ private:
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         
-        // Set user pointer
-        memorybuf.reset();
-        curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memorybuf);
+        // Set read function with user pointer
+        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &readResponse);
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
-        
-        // Set read function
-        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &readResponse);
+        //curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memorybuf);
+        curl_easy_setopt(handle, CURLOPT_WRITEDATA, this);
         if (code)
             throw new CurlEasyException(code, "curl_easy_setopt");
         
@@ -345,6 +338,7 @@ private:
         }
         
         // Perform request
+        memorybuf.reset();
         code = curl_easy_perform(handle);
         if (code)
             throw new CurlEasyException(code, "curl_easy_perform");
@@ -360,7 +354,8 @@ private:
             curl_slist_free_all(slist_headers);
         curl_easy_cleanup(handle);
         
-        // NOTE: memory buffer holds its own memory buffer
+        // Make up response, memory buffer holds its own memory buffer that
+        // it copied from reading the response
         HTTPResponse response = HTTPResponse(
             cast(int)response_code,
             memorybuf.toString()
@@ -368,25 +363,33 @@ private:
         return response;
     }
     
-    static
-    size_t readResponse(void *content, size_t size, size_t nmemb, void *userp)
-    {
-        size_t realsize = size * nmemb;
-        MemoryBuffer *mem = cast(MemoryBuffer*)userp;
-        logTrace("content=%s size=%u nmemb=%u userp=%s", content, size, nmemb, userp);
-        mem.append(content, realsize);
-        return realsize;
-    }
 }
 
-version (none)
+// "[...] this callback gets called many times and each invoke delivers"
+// "another chunk of data. ptr points to the delivered data, and the size"
+// "of that data is nmemb; size is always 1."
+// Observed: nmemb is always 1, size varies.
+extern (C) // ABI issues otherwise
+size_t readResponse(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    logTrace("ptr=%s size=%u nmemb=%u userdata=%s", ptr, size, nmemb, userdata);
+    assert(userdata, "userdata null");
+    if (ptr == null || size == 0 || nmemb == 0)
+        return 0;
+    size_t realsize = size * nmemb;
+    HTTPClient client = cast(HTTPClient)userdata;
+    client.memorybuf.append(ptr, realsize);
+    return realsize;
+}
+
+//version (none)
 unittest
 {
     import std.stdio;
-    // 
-    scope HTTPClient client = new HTTPClient()
+    HTTPClient client = new HTTPClient()
         .setUserAgent("Test/0.0.0");
     
+    // TODO: curl-like client (subpackage) to test links instead of hardcoded URLs
     HTTPResponse res = client.get(
         "https://jsonplaceholder.typicode.com/todos/1"
     );
