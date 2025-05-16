@@ -45,11 +45,11 @@ else version (Posix)
 }
 
 struct CURL;
-struct curl_slist;
+struct curl_slist; // @suppress(dscanner.style.phobos_naming_convention)
 
 alias curl_off_t = long;
 
-struct curl_ws_frame
+struct curl_ws_frame // @suppress(dscanner.style.phobos_naming_convention)
 {
     int age;              /// zero
     int flags;            /// See the CURLWS_* defines
@@ -195,10 +195,10 @@ enum : CURLcode
 private enum
 {
     CURLOPTTYPE_LONG            = 0,
-    CURLOPTTYPE_OBJECTPOINT     = 10000,
-    CURLOPTTYPE_FUNCTIONPOINT   = 20000,
-    CURLOPTTYPE_OFF_T           = 30000,
-    CURLOPTTYPE_BLOB            = 40000,
+    CURLOPTTYPE_OBJECTPOINT     = 10000, // @suppress(dscanner.style.number_literals)
+    CURLOPTTYPE_FUNCTIONPOINT   = 20000, // @suppress(dscanner.style.number_literals)
+    CURLOPTTYPE_OFF_T           = 30000, // @suppress(dscanner.style.number_literals)
+    CURLOPTTYPE_BLOB            = 40000, // @suppress(dscanner.style.number_literals)
 
     // Aliases
     CURLOPTTYPE_STRINGPOINT     = CURLOPTTYPE_OBJECTPOINT,
@@ -539,33 +539,33 @@ __gshared
 
 private __gshared
 {
-    DynamicLibrary libcurl;
+    DynamicLibrary lib; // "lib" to avoid conflicting with module name
 }
 
 void curlLoad()
 {
-    if (libcurl.handle) return;
+    if (lib.handle) return;
     
-    libcurl = libraryLoad(curlname);
-    libraryBind(libcurl, cast(void**)&curl_version,        "curl_version");
+    lib = libraryLoad(curlname);
+    libraryBind(lib, cast(void**)&curl_version,        "curl_version");
     
-    libraryBind(libcurl, cast(void**)&curl_global_init,    "curl_global_init");
+    libraryBind(lib, cast(void**)&curl_global_init,    "curl_global_init");
     
-    libraryBind(libcurl, cast(void**)&curl_slist_append,   "curl_slist_append");
-    libraryBind(libcurl, cast(void**)&curl_slist_free_all, "curl_slist_free_all");
+    libraryBind(lib, cast(void**)&curl_slist_append,   "curl_slist_append");
+    libraryBind(lib, cast(void**)&curl_slist_free_all, "curl_slist_free_all");
     
-    libraryBind(libcurl, cast(void**)&curl_easy_cleanup,   "curl_easy_cleanup");
-    libraryBind(libcurl, cast(void**)&curl_easy_duphandle, "curl_easy_duphandle");
-    libraryBind(libcurl, cast(void**)&curl_easy_getinfo,   "curl_easy_getinfo");
-    libraryBind(libcurl, cast(void**)&curl_easy_init,      "curl_easy_init");
-    libraryBind(libcurl, cast(void**)&curl_easy_perform,   "curl_easy_perform");
-    libraryBind(libcurl, cast(void**)&curl_easy_setopt,    "curl_easy_setopt");
-    libraryBind(libcurl, cast(void**)&curl_easy_strerror,  "curl_easy_strerror");
+    libraryBind(lib, cast(void**)&curl_easy_cleanup,   "curl_easy_cleanup");
+    libraryBind(lib, cast(void**)&curl_easy_duphandle, "curl_easy_duphandle");
+    libraryBind(lib, cast(void**)&curl_easy_getinfo,   "curl_easy_getinfo");
+    libraryBind(lib, cast(void**)&curl_easy_init,      "curl_easy_init");
+    libraryBind(lib, cast(void**)&curl_easy_perform,   "curl_easy_perform");
+    libraryBind(lib, cast(void**)&curl_easy_setopt,    "curl_easy_setopt");
+    libraryBind(lib, cast(void**)&curl_easy_strerror,  "curl_easy_strerror");
     
     try // optional
     {
-        libraryBind(libcurl, cast(void**)&curl_ws_recv,    "curl_ws_recv");
-        libraryBind(libcurl, cast(void**)&curl_ws_send,    "curl_ws_send");
+        libraryBind(lib, cast(void**)&curl_ws_recv,    "curl_ws_recv");
+        libraryBind(lib, cast(void**)&curl_ws_send,    "curl_ws_send");
     }
     catch (Exception)
     {
