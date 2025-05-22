@@ -189,10 +189,7 @@ class HTTPClient
             throw new Exception("curl_easy_init returned null");
         
         // Set POST option
-        CURLcode code = void;
-        code = curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_set_option(curl, CURLOPT_POST, 1);
         
         // Now specify the POST data
         if (payload)
@@ -201,19 +198,12 @@ class HTTPClient
             //       But the example does strlen() for CURLOPT_POSTFIELDSIZE.
             //       The example for CURLOPT_POSTFIELDSIZE_LARGE does not.
             //       Let's trust the doc and assume it's same to do this.
-            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, cast(long)payload.length);
-            if (code)
-                throw new CurlEasyException(code, "curl_easy_setopt");
-            
-            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.ptr );
-            if (code)
-                throw new CurlEasyException(code, "curl_easy_setopt");
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, payload.length);
+            curl_set_option(curl, CURLOPT_POSTFIELDS,    payload.ptr);
         }
         else // Empty payload
         {
-            code = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0L);
-            if (code)
-                throw new CurlEasyException(code, "curl_easy_setopt");
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, 0);
         }
         
         return send(curl, canon);
@@ -247,6 +237,9 @@ class HTTPClient
     }
     */
     
+    // TODO: Move WebSocket class here
+    //       WebSocket connectSocket(...)
+    
 private:
     string userAgent;
     string baseUrl;
@@ -279,37 +272,17 @@ private:
         
         logTrace("handle=%s path=%s", handle, path);
         
-        CURLcode code = void;
-        code = curl_easy_setopt(handle, CURLOPT_URL, path.toStringz());
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        //curl_easy_setopt(handle, CURLOPT_USERPWD, "user:pass");
-        
         // Set options
-        curl_easy_setopt(handle, CURLOPT_TCP_KEEPALIVE,  1L); // forgot what this fixes
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        curl_easy_setopt(handle, CURLOPT_MAXREDIRS,      curlMaxRedirects);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        curl_easy_setopt(handle, CURLOPT_VERBOSE,        curlVerbose);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS,     curlTimeoutMs);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_set_option(handle, CURLOPT_URL, path.toStringz());
+        curl_set_option(handle, CURLOPT_TCP_KEEPALIVE, 1); // format what this fixes
+        curl_set_option(handle, CURLOPT_MAXREDIRS, curlMaxRedirects);
+        curl_set_option(handle, CURLOPT_VERBOSE, curlVerbose);
+        curl_set_option(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(handle, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
         
         // Set read function with user pointer
-        curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &readResponse);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        //curl_easy_setopt(handle, CURLOPT_WRITEDATA, &memorybuf);
-        curl_easy_setopt(handle, CURLOPT_WRITEDATA, this);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_set_option(handle, CURLOPT_WRITEFUNCTION, &readResponse);
+        curl_set_option(handle, CURLOPT_WRITEDATA, this);
         
         // Set headers
         curl_slist *curl_headers;
@@ -329,22 +302,16 @@ private:
                 curl_headers = temp;
             }
             
-            curl_easy_setopt(handle, CURLOPT_HTTPHEADER, curl_headers);
-            if (code)
-                throw new CurlEasyException(code, "curl_easy_setopt");
+            curl_set_option(handle, CURLOPT_HTTPHEADER, curl_headers);
         }
         
         // Set user agent
         if (userAgent)
-        {
-            curl_easy_setopt(handle, CURLOPT_USERAGENT, toStringz( userAgent ));
-            if (code)
-                throw new CurlEasyException(code, "curl_easy_setopt");
-        }
+            curl_set_option(handle, CURLOPT_USERAGENT, userAgent.toStringz());
         
         // Perform request
         memorybuf.reset();
-        code = curl_easy_perform(handle);
+        CURLcode code = curl_easy_perform(handle);
         if (code)
             throw new CurlEasyException(code, "curl_easy_perform");
         

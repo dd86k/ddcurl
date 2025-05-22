@@ -584,3 +584,45 @@ string curlVersion()
     
     return verstring[firstslash+1..$]; // Return only version number
 }
+
+// Functions to help setting options
+package
+static
+void curl_set_option(CURL *curl, CURLoption option, void *value)
+{
+    CURLcode code = curl_easy_setopt(curl, option, value);
+    if (code)
+        throw new CurlEasyException(code, "curl_easy_setopt");
+}
+package
+static
+void curl_set_option(CURL *curl, CURLoption option, Object value)
+{
+    CURLcode code = curl_easy_setopt(curl, option, value);
+    if (code)
+        throw new CurlEasyException(code, "curl_easy_setopt");
+}
+package
+static
+void curl_set_option(CURL *curl, CURLoption option, const(char) *value)
+{
+    CURLcode code = curl_easy_setopt(curl, option, value);
+    if (code)
+        throw new CurlEasyException(code, "curl_easy_setopt");
+}
+package
+static
+void curl_set_option(CURL *curl, CURLoption option, int value)
+{
+    CURLcode code = curl_easy_setopt(curl, option, cast(c_long)value);
+    if (code)
+        throw new CurlEasyException(code, "curl_easy_setopt");
+}
+package
+static
+void curl_set_option(CURL *curl, CURLoption option, long value)
+{
+    CURLcode code = curl_easy_setopt(curl, option, cast(c_long)value);
+    if (code)
+        throw new CurlEasyException(code, "curl_easy_setopt");
+}

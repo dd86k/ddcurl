@@ -148,23 +148,10 @@ class WebSocketClient
         if (curl == null)
             throw new Exception("curl_easy_init failed");
         
-        CURLcode code = void;
-        
-        code = curl_easy_setopt(curl, CURLOPT_URL, toStringz( url ));
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        
-        code = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L); // WS style
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        
-        code = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
-        
-        code = curl_easy_setopt(curl, CURLOPT_VERBOSE, curlVerbose);
-        if (code)
-            throw new CurlEasyException(code, "curl_easy_setopt");
+        curl_set_option(curl, CURLOPT_URL, url.toStringz());
+        curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
+        curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
         
         // Set headers
         curl_slist *slist_headers;
@@ -180,11 +167,11 @@ class WebSocketClient
                     throw new Exception("curl_slist_append failed");
             }
             
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist_headers);
+            curl_set_option(curl, CURLOPT_HTTPHEADER, slist_headers);
         }
         
         // Perform HTTP call with upgrade
-        code = curl_easy_perform(curl);
+        CURLcode code = curl_easy_perform(curl);
         if (code)
             throw new CurlEasyException(code, "curl_easy_perform");
         
