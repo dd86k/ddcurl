@@ -3,8 +3,8 @@ module ddcurl.libcurl;
 
 import core.stdc.config : c_long;
 import std.string;
+import std.conv : text;
 import ddloader;
-import ddlogger;
 
 class CurlEasyException : Exception
 {
@@ -14,8 +14,7 @@ class CurlEasyException : Exception
         curlCode = code;
         curlFunction = curlfunc;
         string em = curlErrorMessage(code);
-        logError("%s: (%d) %s", curlfunc, code, em);
-        super(em);
+        super(text(em, " (code: ", code, ")"));
         
         file = _file;
         line = _line;
