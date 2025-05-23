@@ -24,7 +24,7 @@ jobs:
 
     - name: 'Test'
       run: |
-        dub test --compiler=$DC
+        dub test
   Client:
     strategy:
       matrix:
@@ -39,4 +39,4 @@ jobs:
 
     - name: 'Build'
       run: |
-        dub build :client --compiler=$DC
+        dub build :client
