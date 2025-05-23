@@ -14,10 +14,12 @@ void quit(int code = 0)
 
 void main(string[] args)
 {
-    string[] headers;
+    string[] oheaders;
+    bool oinsecure;
     GetoptResult res = void;
     try res = getopt(args, config.caseSensitive,
-        "header", "Add header (key:value)", &headers,
+        "k|insecure", "Do not verify certificates", &oinsecure,
+        "H|header",  "Add header (header=key:value)", &oheaders,
         "version", "Show version page and quit", ()
         {
             writeln("cURL version  : ", curlVersion());
@@ -54,10 +56,12 @@ void main(string[] args)
     }
     
     scope HTTPClient client = new HTTPClient();
+    if (oinsecure)
+        client.setVerifyPeers(false);
     
-    if (headers)
+    if (oheaders)
     {
-        foreach (string header; headers)
+        foreach (string header; oheaders)
         {
             if (!header) // safety check
                 continue;
