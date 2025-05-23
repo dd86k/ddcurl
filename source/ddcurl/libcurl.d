@@ -6,22 +6,23 @@ import std.string;
 import std.conv : text;
 import ddloader;
 
-class CurlEasyException : Exception
+class CurlException : Exception
 {
-    this(CURLcode code, string curlfunc,
+    this(CURLcode _code,
         string _file = __FILE__, size_t _line = __LINE__)
     {
-        curlCode = code;
-        curlFunction = curlfunc;
-        string em = curlErrorMessage(code);
-        super(text(em, " (code: ", code, ")"));
-        
-        file = _file;
-        line = _line;
+        super(text(curlErrorMessage(_code), " (code: ", _code, ")"), _file, _line);
+        code = _code;
     }
     
-    string curlFunction;
-    CURLcode curlCode;
+    this(string message,
+        string _file = __FILE__, size_t _line = __LINE__)
+    {
+        super(message, _file, _line);
+        code = 0;
+    }
+    
+    CURLcode code;
 }
 
 //
@@ -213,6 +214,7 @@ template CURLOPT(int t, int nu) { enum CURLoption CURLOPT = t + nu; }
 // #define CURLOPTDEPRECATED(na,t,nu,v,m) na CURL_DEPRECATED(v,m) = t + nu
 
 // TODO: alias #define CURLOPT_PROGRESSDATA CURLOPT_XFERINFODATA
+// TODO: Finish full list from include/curl/curl.h
 enum : CURLoption
 {
     CURLOPT_WRITEDATA           = CURLOPT!(CURLOPTTYPE_CBPOINT, 1),
@@ -272,6 +274,7 @@ enum : CURLoption
     CURLOPT_MAXCONNECTS         = CURLOPT!(CURLOPTTYPE_LONG, 71),
     CURLOPT_FRESH_CONNECT       = CURLOPT!(CURLOPTTYPE_LONG, 74),
     CURLOPT_HEADERFUNCTION      = CURLOPT!(CURLOPTTYPE_FUNCTIONPOINT, 79),
+    CURLOPT_SSL_VERIFYHOST      = CURLOPT!(CURLOPTTYPE_LONG, 81),
     CURLOPT_COOKIEJAR           = CURLOPT!(CURLOPTTYPE_STRINGPOINT, 82),
     CURLOPT_SSL_CIPHER_LIST     = CURLOPT!(CURLOPTTYPE_STRINGPOINT, 83),
     CURLOPT_HTTP_VERSION        = CURLOPT!(CURLOPTTYPE_VALUES, 84),
@@ -555,7 +558,7 @@ void curlLoad()
     
     CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (code)
-        throw new CurlEasyException(code, "curl_global_init");
+        throw new CurlException(code, "curl_global_init");
 }
 
 string curlErrorMessage(CURLcode code)
@@ -587,41 +590,46 @@ string curlVersion()
 // Functions to help setting options
 package
 static
-void curl_set_option(CURL *curl, CURLoption option, void *value)
+void curl_set_option(CURL *curl, CURLoption option, void *value,
+    string _file = __FILE__, int _line = __LINE__)
 {
     CURLcode code = curl_easy_setopt(curl, option, value);
     if (code)
-        throw new CurlEasyException(code, "curl_easy_setopt");
+        throw new CurlException(code, _file, _line);
 }
 package
 static
-void curl_set_option(CURL *curl, CURLoption option, Object value)
+void curl_set_option(CURL *curl, CURLoption option, Object value,
+    string _file = __FILE__, int _line = __LINE__)
 {
     CURLcode code = curl_easy_setopt(curl, option, value);
     if (code)
-        throw new CurlEasyException(code, "curl_easy_setopt");
+        throw new CurlException(code, _file, _line);
 }
 package
 static
-void curl_set_option(CURL *curl, CURLoption option, const(char) *value)
+void curl_set_option(CURL *curl, CURLoption option, const(char) *value,
+    string _file = __FILE__, int _line = __LINE__)
 {
     CURLcode code = curl_easy_setopt(curl, option, value);
     if (code)
-        throw new CurlEasyException(code, "curl_easy_setopt");
+        throw new CurlException(code, _file, _line);
 }
 package
 static
-void curl_set_option(CURL *curl, CURLoption option, int value)
+void curl_set_option(CURL *curl, CURLoption option, int value,
+    string _file = __FILE__, int _line = __LINE__)
 {
     CURLcode code = curl_easy_setopt(curl, option, cast(c_long)value);
     if (code)
-        throw new CurlEasyException(code, "curl_easy_setopt");
+        throw new CurlException(code, _file, _line);
 }
 package
 static
-void curl_set_option(CURL *curl, CURLoption option, long value)
+void curl_set_option(CURL *curl, CURLoption option, long value,
+    string _file = __FILE__, int _line = __LINE__)
 {
     CURLcode code = curl_easy_setopt(curl, option, cast(c_long)value);
     if (code)
-        throw new CurlEasyException(code, "curl_easy_setopt");
+        throw new CurlException(code, _file, _line);
 }

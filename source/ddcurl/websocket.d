@@ -51,7 +51,7 @@ struct WebSocketConnection
                 goto Lread;
             default:
             }
-            throw new Exception(curlErrorMessage(code));
+            throw new CurlException(code);
         }
         
         total += rdsize;
@@ -65,7 +65,7 @@ struct WebSocketConnection
                 size_t newsize = total + curl_frame.bytesleft;
                 buffer = realloc(buffer, newsize);
                 if (buffer == null)
-                    throw new Exception("realloc failed");
+                    throw new CurlException("realloc failed");
                 bufsize = newsize;
             }
             
@@ -105,7 +105,7 @@ private:
         size_t sendsize;
         CURLcode code = curl_ws_send(curl, data.ptr, data.length, &sendsize, 0, flags);
         if (code)
-            throw new Exception(curlErrorMessage(code));
+            throw new CurlException(code);
         return sendsize;
     }
 }
@@ -146,7 +146,7 @@ class WebSocketClient
         // Open connection
         curl = curl_easy_init();
         if (curl == null)
-            throw new Exception("curl_easy_init failed");
+            throw new CurlException("curl_easy_init failed");
         
         curl_set_option(curl, CURLOPT_URL, url.toStringz());
         curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
@@ -165,7 +165,7 @@ class WebSocketClient
                 
                 slist_headers = curl_slist_append(slist_headers, toStringz( header ));
                 if (slist_headers == null)
-                    throw new Exception("curl_slist_append failed");
+                    throw new CurlException("curl_slist_append failed");
             }
             
             curl_set_option(curl, CURLOPT_HTTPHEADER, slist_headers);
@@ -174,7 +174,7 @@ class WebSocketClient
         // Perform HTTP call with upgrade
         CURLcode code = curl_easy_perform(curl);
         if (code)
-            throw new CurlEasyException(code, "curl_easy_perform");
+            throw new CurlException(code);
         
         // Call user delegate
         WebSocketConnection ws = WebSocketConnection(curl);

@@ -166,7 +166,7 @@ class HTTPClient
         
         CURL *curl = curl_easy_init();
         if (curl == null)
-            throw new Exception("curl_easy_init returned null");
+            throw new CurlException("curl_easy_init returned null");
         
         return send(curl, canon);
     }
@@ -186,7 +186,7 @@ class HTTPClient
         
         CURL *curl = curl_easy_init();
         if (curl == null)
-            throw new Exception("curl_easy_init returned null");
+            throw new CurlException("curl_easy_init returned null");
         
         // Set POST option
         curl_set_option(curl, CURLOPT_POST, 1);
@@ -297,7 +297,7 @@ private:
                 if (temp == null)
                 {
                     curl_slist_free_all(curl_headers);
-                    throw new Exception("curl_slist_append failed");
+                    throw new CurlException("curl_slist_append failed");
                 }
                 
                 curl_headers = temp;
@@ -314,13 +314,13 @@ private:
         memorybuf.reset();
         CURLcode code = curl_easy_perform(handle);
         if (code)
-            throw new CurlEasyException(code, "curl_easy_perform");
+            throw new CurlException(code);
         
         // Get response code
         c_long response_code;
         code = curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response_code);
         if (code)
-            throw new CurlEasyException(code, "curl_easy_getinfo");
+            throw new CurlException(code);
         
         // Cleanup
         if (curl_headers)
