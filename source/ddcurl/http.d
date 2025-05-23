@@ -11,6 +11,7 @@ import std.concurrency;
 import ddcurl.libcurl;
 import ddcurl.utils;
 import ddlogger;
+public import ddcurl.websocket : WebSocket;
 
 immutable
 {
@@ -237,15 +238,50 @@ class HTTPClient
     }
     */
     
-    // TODO: Move WebSocket class here
-    //       WebSocket connectSocket(...)
+    /// Connect to a WebSocket.
+    ///
+    /// Protocols: ws://, wss://
+    /// Returns: WebSocket connection.
+    WebSocket connectSocket(string url)
+    {
+        // TODO: wrap in version(Dynamic)
+        if (curl_ws_recv == null || curl_ws_send == null)
+            throw new Exception("WebSockets are unavailable");
+        
+        // Open connection
+        CURL *curl = curl_easy_init();
+        if (curl == null)
+            throw new CurlException("curl_easy_init failed");
+        
+        // Merge base path if available
+        string path = canonicalPath(url);
+        
+        curl_set_option(curl, CURLOPT_URL, path.toStringz());
+        curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
+        curl_set_option(curl, CURLOPT_MAXREDIRS, curlMaxRedirects);
+        curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
+        curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
+        
+        // Add headers
+        curl_slist *curl_headers = addAllHeaders(curl);
+        
+        // Perform HTTP call, curl manages the upgrade
+        CURLcode code = curl_easy_perform(curl);
+        if (code)
+            throw new CurlException(code);
+        
+        return WebSocket(curl, curl_headers);
+    }
     
 private:
     string userAgent;
     string baseUrl;
     string[string] headers;
     
-    CURL *curlMain;
+    char[CURL_ERROR_SIZE] error_buffer;
+    
     c_long curlVerbose;
     c_long curlMaxRedirects = 5;
     c_long curlTimeoutMs = 10_000;
@@ -265,67 +301,83 @@ private:
             throw new Exception("Path is empty and BaseURL is unset");
     }
     
-    HTTPResponse send(CURL *handle, string path)
+    // Add headers and return slist to be freed later
+    curl_slist* addAllHeaders(CURL *curl)
     {
-        assert(handle);
-        assert(path);
+        // No headers to add, nothing to free later
+        if (headers.length == 0)
+            return null;
         
-        logTrace("handle=%s path=%s", handle, path);
+        // Required
+        curl_set_option(curl, CURLOPT_ERRORBUFFER, error_buffer.ptr);
         
-        // Set options
-        curl_set_option(handle, CURLOPT_URL, path.toStringz());
-        curl_set_option(handle, CURLOPT_TCP_KEEPALIVE, 1); // format what this fixes
-        curl_set_option(handle, CURLOPT_MAXREDIRS, curlMaxRedirects);
-        curl_set_option(handle, CURLOPT_VERBOSE, curlVerbose);
-        curl_set_option(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
-        curl_set_option(handle, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
-        curl_set_option(handle, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
-        
-        // Set read function with user pointer
-        curl_set_option(handle, CURLOPT_WRITEFUNCTION, &readResponse);
-        curl_set_option(handle, CURLOPT_WRITEDATA, this);
-        
-        // Set headers
         curl_slist *curl_headers;
-        if (headers.length)
+        foreach (key, value; headers)
         {
-            foreach (key, value; headers)
+            char[256] buffer = void;
+            char[] header = sformat(buffer, "%s: %s", key, value);
+            
+            // Strings are duplicated within cURL
+            curl_slist *temp = curl_slist_append(curl_headers, header.toStringz());
+            if (temp == null)
             {
-                string hdr = format("%s: %s", key, value);
-                
-                curl_slist *temp = curl_slist_append(curl_headers, hdr.toStringz());
-                if (temp == null)
-                {
-                    curl_slist_free_all(curl_headers);
-                    throw new CurlException("curl_slist_append failed");
-                }
-                
-                curl_headers = temp;
+                curl_slist_free_all(curl_headers);
+                throw new CurlException(error_buffer);
             }
             
-            curl_set_option(handle, CURLOPT_HTTPHEADER, curl_headers);
+            curl_headers = temp;
         }
+        
+        if (curl_headers)
+            curl_set_option(curl, CURLOPT_HTTPHEADER, curl_headers);
+        
+        return curl_headers;
+    }
+    
+    HTTPResponse send(CURL *curl, string path)
+    {
+        assert(curl);
+        assert(path);
+        
+        logTrace("handle=%s path=%s", curl, path);
+        
+        // Set options
+        curl_set_option(curl, CURLOPT_URL, path.toStringz());
+        curl_set_option(curl, CURLOPT_TCP_KEEPALIVE, 1); // forgot what this fixes
+        curl_set_option(curl, CURLOPT_MAXREDIRS, curlMaxRedirects);
+        curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
+        curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
+        curl_set_option(curl, CURLOPT_ERRORBUFFER, error_buffer.ptr);
+        
+        // Set read function with user pointer
+        curl_set_option(curl, CURLOPT_WRITEFUNCTION, &readResponse);
+        curl_set_option(curl, CURLOPT_WRITEDATA, this);
+        
+        // Add headers
+        curl_slist *curl_headers = addAllHeaders(curl);
         
         // Set user agent
         if (userAgent)
-            curl_set_option(handle, CURLOPT_USERAGENT, userAgent.toStringz());
+            curl_set_option(curl, CURLOPT_USERAGENT, userAgent.toStringz());
         
         // Perform request
         memorybuf.reset();
-        CURLcode code = curl_easy_perform(handle);
+        CURLcode code = curl_easy_perform(curl);
         if (code)
             throw new CurlException(code);
         
         // Get response code
         c_long response_code;
-        code = curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response_code);
+        code = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         if (code)
             throw new CurlException(code);
         
         // Cleanup
         if (curl_headers)
             curl_slist_free_all(curl_headers);
-        curl_easy_cleanup(handle);
+        curl_easy_cleanup(curl);
         
         // Make up response, memory buffer holds its own memory buffer that
         // it copied from reading the response

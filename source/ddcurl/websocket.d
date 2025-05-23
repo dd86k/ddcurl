@@ -5,27 +5,53 @@ import core.stdc.stdlib : malloc, realloc, free;
 import core.stdc.string : memcpy, strerror;
 import core.stdc.errno  : errno;
 import core.stdc.config : c_long;
-import core.thread;
 import std.format;
 import std.string;
-import std.json;
 import ddcurl.libcurl;
 import ddlogger;
 
-/// Represents an active WebSocket connection.
-struct WebSocketConnection
+private
+enum // Bitflag for WebSocket
 {
-    this(CURL *handle, size_t bufferSize = 16 * 1024)
+    WEBSOCKET_ACTIVE = 1,
+}
+
+/// Represents an active WebSocket connection.
+struct WebSocket
+{
+    /// Invoke constructor with an active CURL pointer instance.
+    ///
+    /// Usually, HTTPClient should have created one for you using HTTPClient.connectSocket,
+    /// but in the case that HTTPClient doesn't cover a use-case, you're free to initiate
+    /// a WebSocket instance here.
+    this(CURL *handle,
+        curl_slist *headers = null, // compat with older WebSocketClient class
+        size_t bufferSize = 4 * 1024)
     {
-        curl = handle;
+        // Allocate buffer for receiving data
         buffer = malloc(bufferSize);
         if (buffer == null)
             throw new Exception(cast(string)fromStringz( strerror(errno) ));
         bufsize = bufferSize;
+        
+        curl = handle;
+        curl_headers = headers;
+        status = WEBSOCKET_ACTIVE;
     }
     
+    ~this()
+    {
+        close();
+    }
+    
+    /// Receive data.
+    /// Returns: Buffer. If empty (null), then connection was closed.
     ubyte[] receive()
     {
+        assert(curl,    "curl==null");
+        assert(buffer,  "buffer==null");
+        assert(bufsize, "bufsize==0");
+        
         size_t total;
         size_t rdsize = void;
     Lread:
@@ -37,20 +63,23 @@ struct WebSocketConnection
             logTrace("curl_ws_recv: code=%d curl_ws_frame { age=%d flags=%x offset=%d left=%d len=%u }",
                 code, age, flags, offset, bytesleft, len);
             
+            // Closing
             if (curl_frame.flags & CURLWS_CLOSE)
+            {
+                close();
                 return null;
+            }
         }
         
-        if (code)
-        {
-            switch (code) {
-            case CURLE_AGAIN:
-                static immutable Duration ws_sleep = 1.seconds;
-                logTrace("Socket not ready, sleeping for %s", ws_sleep);
-                Thread.sleep(ws_sleep);
-                goto Lread;
-            default:
-            }
+        switch (code) {
+        case CURLE_OK:
+        case CURLE_AGAIN:
+            // HACK: Sleep instead, until things synchronizes, or whatever
+            //       See HACK with the sleeptime variable
+            logTrace("Socket not ready, sleeping for %s", sleeptime);
+            Thread.sleep(sleeptime);
+            goto Lread;
+        default:
             throw new CurlException(code);
         }
         
@@ -75,42 +104,107 @@ struct WebSocketConnection
         return cast(ubyte[])buffer[0..total];
     }
     
+    /// Send text data (CURLWS_TEXT).
+    /// Params: data = Text buffer.
+    /// Returns: Number of sent bytes.
     size_t send(const(char)[] data)
     {
-        return curl_send(cast(ubyte[])data, CURLWS_TEXT);
+        return send(cast(ubyte[])data, CURLWS_TEXT);
     }
     
+    /// Send binary data (CURLWS_BINARY).
+    /// Params: data = Byte buffer.
+    /// Returns: Number of sent bytes.
     size_t send(ubyte[] data)
     {
-        return curl_send(data, CURLWS_BINARY);
+        return send(data, CURLWS_BINARY);
     }
     
+    /// Send data.
+    ///
+    /// Note that flags contain either CURLWS_TEXT, CURLWS_BINARY,
+    /// CURLWS_CLOSE, CURLWS_PING, or CURLWS_PONG.
+    /// Params:
+    ///   data = Byte buffer.
+    ///   flags = Flags to curl_ws_send.
+    /// Returns: Number of sent bytes.
+    size_t send(ubyte[] data, int flags)
+    {
+        size_t sendsize;
+    Lsend:
+        CURLcode code = curl_ws_send(curl, data.ptr, data.length, &sendsize, 0, flags);
+        switch (code) {
+        case CURLE_OK: break;
+        case CURLE_AGAIN:
+            // HACK: Sleep instead, until things synchronizes, or whatever
+            //       See HACK with the sleeptime variable
+            Thread.sleep(sleeptime);
+            goto Lsend;
+        default:
+            throw new CurlException(code);
+        }
+        return sendsize;
+    }
+    
+    /// Close the WebSocket connection.
+    ///
+    /// This sends CURLWS_CLOSE and frees up the buffers
     void close()
     {
+        status = 0;
+        
+        // Send close notification
         size_t sent = void;
+        // The example uses "" instead of null, best avoid trouble.
+        // Avoid using the CURLcode being returned, we're closing shop, anyway.
         cast(void)curl_ws_send(curl, "".ptr, 0, &sent, 0, CURLWS_CLOSE);
+        
+        // Free buffer
+        if (buffer) free(buffer);
+        buffer  = null;
+        bufsize = 0;
+        
+        // Cleanup headers
+        if (curl_headers)
+            curl_slist_free_all(curl_headers);
+        
+        // Cleanup
+        if (curl)
+            curl_easy_cleanup(curl);
+        curl = null;
+    }
+    
+    /// Check if connection is still active.
+    /// Returns: true if connection active
+    bool active()
+    {
+        return status > 0;
     }
     
 private:
     CURL *curl;
+    curl_slist *curl_headers;
     curl_ws_frame *curl_frame;
     
     void *buffer;
     size_t bufsize;
+    int status;
     
-    size_t curl_send(ubyte[] data, int flags)
-    {
-        // TODO: Check if curl_ws_send returns CURLE_AGAIN
-        //       If so, the thread sleeps in implementations can be avoided
-        size_t sendsize;
-        CURLcode code = curl_ws_send(curl, data.ptr, data.length, &sendsize, 0, flags);
-        if (code)
-            throw new CurlException(code);
-        return sendsize;
-    }
+    // HACK: When CURLE_AGAIN happens, because we don't have easy access to select(3),
+    //       we temporarily sleep the thread, to let the socket do its things.
+    // TODO: Use select(3) as noted from example.
+    //       But that's not generally available easily, at least from D.
+    //       And curl does not provide a function to do that easily, cool!
+    //       There are the receive and send situations in here.
+    import core.thread : Thread, dur, Duration;
+    static immutable Duration sleeptime = dur!"msecs"(100);
 }
 
+/// Old alias for WebSocket.
+alias WebSocketConnection = WebSocket;
+
 /// High-level representation of a WebSocket client.
+deprecated("Use HTTPClient.websocket")
 class WebSocketClient
 {
     this()
