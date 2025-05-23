@@ -141,7 +141,7 @@ class HTTPClient
     ///   ms = Timeout in milliseconds. 0 for no timeouts.
     typeof(this) setTimeout(long ms)
     {
-        curlTimeoutMs = ms;
+        curlTimeoutMs = cast(c_long)ms;
         return this;
     }
     
