@@ -20,13 +20,14 @@ struct MemoryBuffer
     
     void reset()
     {
-        length = 0;
-        // This helps long-lived sessions (e.g., client services)
-        // when a client previously receives a much larger response than
-        // the initial capacity. Plus, when having small replies, there's
-        // no point in unconditionally resizing the buffer, which could be
-        // wasteful towards realloc.
+        // Help long-lived sessions (e.g., client services).
+        // When a client previously receives a much larger response than
+        // the initial capacity, it'd be nice to resize the buffer, in hopes
+        // that some memory might be reclaimed later.
+        // Plus, there's no point in unconditionally resizing the buffer,
+        // since most (API) replies are rather short.
         if (length > INITCAP) resize(INITCAP);
+        length = 0;
     }
     
     void append(void *data, size_t size)
