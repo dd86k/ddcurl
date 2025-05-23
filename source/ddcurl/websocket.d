@@ -151,6 +151,7 @@ class WebSocketClient
         curl_set_option(curl, CURLOPT_URL, url.toStringz());
         curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
         curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(curl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
         curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
         
         // Set headers

@@ -278,6 +278,7 @@ private:
         curl_set_option(handle, CURLOPT_MAXREDIRS, curlMaxRedirects);
         curl_set_option(handle, CURLOPT_VERBOSE, curlVerbose);
         curl_set_option(handle, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(handle, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
         curl_set_option(handle, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
         
         // Set read function with user pointer
