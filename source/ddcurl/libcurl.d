@@ -8,20 +8,37 @@ import ddloader;
 
 class CurlException : Exception
 {
+    // Via code
     this(CURLcode _code,
         string _file = __FILE__, size_t _line = __LINE__)
     {
-        super(text(curlErrorMessage(_code), " (code: ", _code, ")"), _file, _line);
+        string m = text(curlErrorMessage(_code), " (code: ", _code, ")");
+        super(m, _file, _line);
         code = _code;
     }
     
+    // Via error buffer
+    this(ref char[CURL_ERROR_SIZE] buf,
+        string _file = __FILE__, size_t _line = __LINE__)
+    {
+        import core.stdc.string : strlen;
+        size_t l = strlen(buf.ptr);
+        // If we have a length, slice it.
+        // Otherwise, generic message. (We probably forgot to set the option)
+        string m = l ? buf[0..l].idup : "A curl error happened";
+        super(m, _file, _line);
+        code = 0;
+    }
+    
+    // Generic message, when all else fails
     this(string message,
         string _file = __FILE__, size_t _line = __LINE__)
     {
         super(message, _file, _line);
-        code = 0;
+        code = 0; // No codes available here
     }
     
+    /// Original CURL code
     CURLcode code;
 }
 
@@ -558,7 +575,7 @@ void curlLoad()
     
     CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (code)
-        throw new CurlException(code, "curl_global_init");
+        throw new CurlException(code);
 }
 
 string curlErrorMessage(CURLcode code)
