@@ -4,7 +4,8 @@ module ddcurl.libcurl;
 import core.stdc.config : c_long;
 import std.string;
 import std.conv : text;
-import ddloader;
+version (DynamicBinding)
+    import ddloader;
 
 class CurlException : Exception
 {
@@ -46,19 +47,26 @@ class CurlException : Exception
 // libcurl interface
 //
 
-version (Windows)
+version (StaticBinding)
+    version (DynamicBinding)
+        static assert(0, "StaticBinding and DynamicBinding are mutually exclusive");
+
+version (DynamicBinding)
 {
-    private immutable string[] curlname = [
-        "libcurl.dll"
-    ];
-}
-else version (Posix)
-{
-    private immutable string[] curlname = [
-        "libcurl.so.4.8.0",
-        "libcurl.so.4.7.0",
-        "libcurl.so",
-    ];
+    version (Windows)
+    {
+        private immutable string[] curlname = [
+            "libcurl.dll"
+        ];
+    }
+    else version (Posix)
+    {
+        private immutable string[] curlname = [
+            "libcurl.so.4.8.0",
+            "libcurl.so.4.7.0",
+            "libcurl.so",
+        ];
+    }
 }
 
 struct CURL;
@@ -485,9 +493,72 @@ enum : CURLINFO
     CURLINFO_TYPEMASK = 0xf00000,
 }
 
-enum
+enum : CURLINFO  // curl_easy_getinfo options
 {
+    CURLINFO_NONE, /// first, never use this
+    CURLINFO_EFFECTIVE_URL    = CURLINFO_STRING + 1,
     CURLINFO_RESPONSE_CODE    = CURLINFO_LONG   + 2,
+    CURLINFO_TOTAL_TIME       = CURLINFO_DOUBLE + 3,
+    CURLINFO_NAMELOOKUP_TIME  = CURLINFO_DOUBLE + 4,
+    CURLINFO_CONNECT_TIME     = CURLINFO_DOUBLE + 5,
+    CURLINFO_PRETRANSFER_TIME = CURLINFO_DOUBLE + 6,
+    CURLINFO_SIZE_UPLOAD_T    = CURLINFO_OFF_T  + 7,
+    CURLINFO_SIZE_DOWNLOAD_T  = CURLINFO_OFF_T  + 8,
+    CURLINFO_SPEED_DOWNLOAD_T = CURLINFO_OFF_T  + 9,
+    CURLINFO_SPEED_UPLOAD_T   = CURLINFO_OFF_T  + 10,
+    CURLINFO_HEADER_SIZE      = CURLINFO_LONG   + 11,
+    CURLINFO_REQUEST_SIZE     = CURLINFO_LONG   + 12,
+    CURLINFO_SSL_VERIFYRESULT = CURLINFO_LONG   + 13,
+    CURLINFO_FILETIME         = CURLINFO_LONG   + 14,
+    CURLINFO_FILETIME_T       = CURLINFO_OFF_T  + 14,
+    CURLINFO_CONTENT_LENGTH_DOWNLOAD_T = CURLINFO_OFF_T  + 15,
+    CURLINFO_CONTENT_LENGTH_UPLOAD_T   = CURLINFO_OFF_T  + 16,
+    CURLINFO_STARTTRANSFER_TIME = CURLINFO_DOUBLE + 17,
+    CURLINFO_CONTENT_TYPE     = CURLINFO_STRING + 18,
+    CURLINFO_REDIRECT_TIME    = CURLINFO_DOUBLE + 19,
+    CURLINFO_REDIRECT_COUNT   = CURLINFO_LONG   + 20,
+    CURLINFO_PRIVATE          = CURLINFO_STRING + 21,
+    CURLINFO_HTTP_CONNECTCODE = CURLINFO_LONG   + 22,
+    CURLINFO_HTTPAUTH_AVAIL   = CURLINFO_LONG   + 23,
+    CURLINFO_PROXYAUTH_AVAIL  = CURLINFO_LONG   + 24,
+    CURLINFO_OS_ERRNO         = CURLINFO_LONG   + 25,
+    CURLINFO_NUM_CONNECTS     = CURLINFO_LONG   + 26,
+    CURLINFO_SSL_ENGINES      = CURLINFO_SLIST  + 27,
+    CURLINFO_COOKIELIST       = CURLINFO_SLIST  + 28,
+    CURLINFO_FTP_ENTRY_PATH   = CURLINFO_STRING + 30,
+    CURLINFO_REDIRECT_URL     = CURLINFO_STRING + 31,
+    CURLINFO_PRIMARY_IP       = CURLINFO_STRING + 32,
+    CURLINFO_APPCONNECT_TIME  = CURLINFO_DOUBLE + 33,
+    CURLINFO_CERTINFO         = CURLINFO_PTR    + 34,
+    CURLINFO_CONDITION_UNMET  = CURLINFO_LONG   + 35,
+    CURLINFO_RTSP_SESSION_ID  = CURLINFO_STRING + 36,
+    CURLINFO_RTSP_CLIENT_CSEQ = CURLINFO_LONG   + 37,
+    CURLINFO_RTSP_SERVER_CSEQ = CURLINFO_LONG   + 38,
+    CURLINFO_RTSP_CSEQ_RECV   = CURLINFO_LONG   + 39,
+    CURLINFO_PRIMARY_PORT     = CURLINFO_LONG   + 40,
+    CURLINFO_LOCAL_IP         = CURLINFO_STRING + 41,
+    CURLINFO_LOCAL_PORT       = CURLINFO_LONG   + 42,
+    CURLINFO_ACTIVESOCKET     = CURLINFO_SOCKET + 44,
+    CURLINFO_TLS_SSL_PTR      = CURLINFO_PTR    + 45,
+    CURLINFO_HTTP_VERSION     = CURLINFO_LONG   + 46,
+    CURLINFO_PROXY_SSL_VERIFYRESULT = CURLINFO_LONG + 47,
+    CURLINFO_SCHEME           = CURLINFO_STRING + 49,
+    CURLINFO_TOTAL_TIME_T     = CURLINFO_OFF_T + 50,
+    CURLINFO_NAMELOOKUP_TIME_T = CURLINFO_OFF_T + 51,
+    CURLINFO_CONNECT_TIME_T   = CURLINFO_OFF_T + 52,
+    CURLINFO_PRETRANSFER_TIME_T = CURLINFO_OFF_T + 53,
+    CURLINFO_STARTTRANSFER_TIME_T = CURLINFO_OFF_T + 54,
+    CURLINFO_REDIRECT_TIME_T  = CURLINFO_OFF_T + 55,
+    CURLINFO_APPCONNECT_TIME_T = CURLINFO_OFF_T + 56,
+    CURLINFO_RETRY_AFTER      = CURLINFO_OFF_T + 57,
+    CURLINFO_EFFECTIVE_METHOD = CURLINFO_STRING + 58,
+    CURLINFO_PROXY_ERROR      = CURLINFO_LONG + 59,
+    CURLINFO_REFERER          = CURLINFO_STRING + 60,
+    CURLINFO_CAINFO           = CURLINFO_STRING + 61,
+    CURLINFO_CAPATH           = CURLINFO_STRING + 62,
+    CURLINFO_XFER_ID          = CURLINFO_OFF_T + 63,
+    CURLINFO_CONN_ID          = CURLINFO_OFF_T + 64,
+    CURLINFO_LASTONE          = 64
 }
 
 enum CURL_GLOBAL_SSL        = (1<<0); /* no purpose since 7.57.0 */
@@ -509,74 +580,120 @@ enum
     CURLWS_PONG       = 1 << 6,
 }
 
-__gshared
+version (DynamicBinding)
 {
-    const(char)* function() curl_version;
-    
-    CURLcode function(c_long flags) curl_global_init;
-    
-    extern (C) // DMD really needs this extern for this function... DON'T ASK WHY
-    curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
-    void function(curl_slist *list) curl_slist_free_all;
-    
-    CURL* function() curl_easy_init;
-    const(char)* function(CURLcode) curl_easy_strerror;
-    CURL* function(CURL *handle) curl_easy_duphandle;
-    extern (C)
-    CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
-    CURLcode function(CURL *easy_handle) curl_easy_perform;
-    void function(CURL *handle) curl_easy_cleanup;
-    extern (C)
-    CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
-    
-    CURLcode function(CURL *curl,
-        void *buffer, size_t buflen,
-        size_t *recv, curl_ws_frame **metap) curl_ws_recv;
-    
-    CURLcode function(CURL *curl, const void *buffer,
-        size_t buflen, size_t *sent,
-        curl_off_t fragsize,
-        uint flags) curl_ws_send;
-}
-
-private __gshared
-{
-    DynamicLibrary lib; // "lib" to avoid conflicting with module name
-}
-
-void curlLoad()
-{
-    if (lib.handle) return;
-    
-    lib = libraryLoad(curlname);
-    libraryBind(lib, cast(void**)&curl_version,        "curl_version");
-    
-    libraryBind(lib, cast(void**)&curl_global_init,    "curl_global_init");
-    
-    libraryBind(lib, cast(void**)&curl_slist_append,   "curl_slist_append");
-    libraryBind(lib, cast(void**)&curl_slist_free_all, "curl_slist_free_all");
-    
-    libraryBind(lib, cast(void**)&curl_easy_cleanup,   "curl_easy_cleanup");
-    libraryBind(lib, cast(void**)&curl_easy_duphandle, "curl_easy_duphandle");
-    libraryBind(lib, cast(void**)&curl_easy_getinfo,   "curl_easy_getinfo");
-    libraryBind(lib, cast(void**)&curl_easy_init,      "curl_easy_init");
-    libraryBind(lib, cast(void**)&curl_easy_perform,   "curl_easy_perform");
-    libraryBind(lib, cast(void**)&curl_easy_setopt,    "curl_easy_setopt");
-    libraryBind(lib, cast(void**)&curl_easy_strerror,  "curl_easy_strerror");
-    
-    try // optional
+    __gshared
     {
-        libraryBind(lib, cast(void**)&curl_ws_recv,    "curl_ws_recv");
-        libraryBind(lib, cast(void**)&curl_ws_send,    "curl_ws_send");
+        const(char)* function() curl_version;
+
+        CURLcode function(c_long flags) curl_global_init;
+
+        extern (C) // DMD really needs this extern for this function... DON'T ASK WHY
+        curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
+        void function(curl_slist *list) curl_slist_free_all;
+
+        CURL* function() curl_easy_init;
+        const(char)* function(CURLcode) curl_easy_strerror;
+        CURL* function(CURL *handle) curl_easy_duphandle;
+        extern (C)
+        CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
+        CURLcode function(CURL *easy_handle) curl_easy_perform;
+        void function(CURL *handle) curl_easy_cleanup;
+        extern (C)
+        CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
+
+        CURLcode function(CURL *curl,
+            void *buffer, size_t buflen,
+            size_t *recv, curl_ws_frame **metap) curl_ws_recv;
+
+        CURLcode function(CURL *curl, const void *buffer,
+            size_t buflen, size_t *sent,
+            curl_off_t fragsize,
+            uint flags) curl_ws_send;
     }
-    catch (Exception)
+
+    private __gshared
     {
+        DynamicLibrary lib; // "lib" to avoid conflicting with module name
     }
-    
-    CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-    if (code)
-        throw new CurlException(code);
+
+    void curlLoad()
+    {
+        if (lib.handle) return;
+
+        lib = libraryLoad(curlname);
+        libraryBind(lib, cast(void**)&curl_version,        "curl_version");
+
+        libraryBind(lib, cast(void**)&curl_global_init,    "curl_global_init");
+
+        libraryBind(lib, cast(void**)&curl_slist_append,   "curl_slist_append");
+        libraryBind(lib, cast(void**)&curl_slist_free_all, "curl_slist_free_all");
+
+        libraryBind(lib, cast(void**)&curl_easy_cleanup,   "curl_easy_cleanup");
+        libraryBind(lib, cast(void**)&curl_easy_duphandle, "curl_easy_duphandle");
+        libraryBind(lib, cast(void**)&curl_easy_getinfo,   "curl_easy_getinfo");
+        libraryBind(lib, cast(void**)&curl_easy_init,      "curl_easy_init");
+        libraryBind(lib, cast(void**)&curl_easy_perform,   "curl_easy_perform");
+        libraryBind(lib, cast(void**)&curl_easy_setopt,    "curl_easy_setopt");
+        libraryBind(lib, cast(void**)&curl_easy_strerror,  "curl_easy_strerror");
+
+        try // optional
+        {
+            libraryBind(lib, cast(void**)&curl_ws_recv,    "curl_ws_recv");
+            libraryBind(lib, cast(void**)&curl_ws_send,    "curl_ws_send");
+        }
+        catch (Exception)
+        {
+        }
+
+        CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
+        if (code)
+            throw new CurlException(code);
+    }
 }
+else version (StaticBinding)
+{
+    extern (C)
+    {
+        const(char)* curl_version();
+
+        CURLcode curl_global_init(c_long flags);
+
+        curl_slist* curl_slist_append(curl_slist *list, const(char) *string_);
+        void curl_slist_free_all(curl_slist *list);
+
+        CURL* curl_easy_init();
+        const(char)* curl_easy_strerror(CURLcode);
+        CURL* curl_easy_duphandle(CURL *handle);
+        CURLcode curl_easy_setopt(CURL *handle, CURLoption option, ...);
+        CURLcode curl_easy_perform(CURL *easy_handle);
+        void curl_easy_cleanup(CURL *handle);
+        CURLcode curl_easy_getinfo(CURL *curl, CURLINFO info, ...);
+
+        CURLcode curl_ws_recv(CURL *curl,
+            void *buffer, size_t buflen,
+            size_t *recv, curl_ws_frame **metap);
+
+        CURLcode curl_ws_send(CURL *curl, const void *buffer,
+            size_t buflen, size_t *sent,
+            curl_off_t fragsize,
+            uint flags);
+    }
+
+    private __gshared bool _initialized;
+
+    void curlLoad()
+    {
+        if (_initialized) return;
+        _initialized = true;
+
+        CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
+        if (code)
+            throw new CurlException(code);
+    }
+}
+else
+    static assert(0, "Either StaticBinding or DynamicBinding must be specified");
 
 string curlErrorMessage(CURLcode code)
 {

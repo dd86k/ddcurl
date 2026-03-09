@@ -178,6 +178,7 @@ struct WebSocket
     /// Returns: true if connection active
     bool active()
     {
+        // TODO: Check out CURLINFO_ACTIVESOCKET
         return status > 0;
     }
     

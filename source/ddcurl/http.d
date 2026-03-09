@@ -244,9 +244,12 @@ class HTTPClient
     /// Returns: WebSocket connection.
     WebSocket connectSocket(string url)
     {
-        // TODO: wrap in version(Dynamic)
-        if (curl_ws_recv == null || curl_ws_send == null)
-            throw new Exception("WebSockets are unavailable");
+        // Dynamic binding loads ws functions optionally; they may be null
+        version (DynamicBinding)
+        {
+            if (curl_ws_recv == null || curl_ws_send == null)
+                throw new Exception("WebSockets are unavailable");
+        }
         
         // Open connection
         CURL *curl = curl_easy_init();
