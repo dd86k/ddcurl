@@ -27,7 +27,7 @@ struct WebSocket
     /// but in the case that HTTPClient doesn't cover a use-case, you're free to initiate
     /// a WebSocket instance here.
     this(CURL *handle,
-        curl_slist *headers = null, // compat with older WebSocketClient class
+        curl_slist *headers = null,
         size_t bufferSize = 4 * 1024)
     {
         // Allocate buffer for receiving data
@@ -39,6 +39,9 @@ struct WebSocket
         curl = handle;
         curl_headers = headers;
         status = WEBSOCKET_ACTIVE;
+
+        // Get the underlying socket fd for poll()
+        sockfd = getSocket();
     }
     
     ~this()
@@ -74,12 +77,9 @@ struct WebSocket
         }
         
         switch (code) {
-        case CURLE_OK:
+        case CURLE_OK: break;
         case CURLE_AGAIN:
-            // HACK: Sleep instead, until things synchronizes, or whatever
-            //       See HACK with the sleeptime variable
-            logTrace("Socket not ready, sleeping for %s", sleeptime);
-            Thread.sleep(sleeptime);
+            pollSocket(POLLIN);
             goto Lread;
         default:
             throw new CurlException(code);
@@ -138,9 +138,7 @@ struct WebSocket
         switch (code) {
         case CURLE_OK: break;
         case CURLE_AGAIN:
-            // HACK: Sleep instead, until things synchronizes, or whatever
-            //       See HACK with the sleeptime variable
-            Thread.sleep(sleeptime);
+            pollSocket(POLLOUT);
             goto Lsend;
         default:
             throw new CurlException(code);
@@ -148,6 +146,13 @@ struct WebSocket
         return sendsize;
     }
     
+    /// Set the poll timeout in milliseconds.
+    /// Params: ms = Timeout in milliseconds. Default is 10 seconds.
+    void setPollTimeout(int ms)
+    {
+        pollTimeout = ms;
+    }
+
     /// Close the WebSocket connection.
     ///
     /// This sends CURLWS_CLOSE and frees up the buffers
@@ -180,7 +185,6 @@ struct WebSocket
     /// Returns: true if connection active
     bool active()
     {
-        // TODO: Check out CURLINFO_ACTIVESOCKET
         return status > 0;
     }
     
@@ -192,15 +196,47 @@ private:
     void *buffer;
     size_t bufsize;
     int status;
+    int sockfd = -1;
+    int pollTimeout = 10_000;
     
-    // HACK: When CURLE_AGAIN happens, because we don't have easy access to select(3),
-    //       we temporarily sleep the thread, to let the socket do its things.
-    // TODO: Use select(3) as noted from example.
-    //       But that's not generally available easily, at least from D.
-    //       And curl does not provide a wrapper function to do that easily, cool!
-    //       There are the receive and send situations in here.
-    import core.thread : Thread, dur, Duration;
-    static immutable Duration sleeptime = dur!"msecs"(100);
+    version (Windows)
+    {
+        import core.sys.windows.winsock2 : pollfd, WSAPoll, POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL;
+        alias syspoll = WSAPoll;
+    }
+    else
+    {
+        import core.sys.posix.poll : pollfd, poll, POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL;
+        alias syspoll = poll;
+    }
+    
+    // Get the underlying socket fd from curl via CURLINFO_ACTIVESOCKET
+    int getSocket()
+    {
+        long sockfd;
+        CURLcode code = curl_easy_getinfo(curl, CURLINFO_ACTIVESOCKET, &sockfd);
+        if (code)
+            throw new CurlException(code);
+        if (sockfd == -1)
+            throw new CurlException("No active socket");
+        return cast(int)sockfd;
+    }
+    
+    // Poll the socket until it is ready for the given events (POLLIN or POLLOUT).
+    void pollSocket(short events)
+    {
+        pollfd pfd;
+        pfd.fd = sockfd;
+        pfd.events = events;
+
+        int ret = syspoll(&pfd, 1, pollTimeout);
+        if (ret == -1)
+            throw new Exception(cast(string)fromStringz( strerror(errno) ));
+        if (ret == 0)
+            throw new CurlException("WebSocket poll timed out");
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+            throw new CurlException("WebSocket poll error");
+    }
 }
 
 /// Old alias for WebSocket.
