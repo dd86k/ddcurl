@@ -42,6 +42,9 @@ struct WebSocket
         curl_slist *headers = null,
         size_t bufferSize = 4 * 1024)
     {
+        if (handle == null)
+            throw new Exception("Invalid cURL handle");
+        
         // Allocate buffer for receiving data
         buffer = malloc(bufferSize);
         if (buffer == null)
@@ -68,6 +71,9 @@ struct WebSocket
         assert(curl,    "curl==null");
         assert(buffer,  "buffer==null");
         assert(bufsize, "bufsize==0");
+        
+        if (curl == null)
+            return null;
         
         size_t total;
         size_t rdsize = void;
@@ -144,6 +150,9 @@ struct WebSocket
     /// Returns: Number of sent bytes.
     size_t send(ubyte[] data, int flags)
     {
+        if (curl == null)
+            return 0;
+        
         size_t sendsize;
     Lsend:
         CURLcode code = curl_ws_send(curl, data.ptr, data.length, &sendsize, 0, flags);
@@ -170,6 +179,9 @@ struct WebSocket
     /// This sends CURLWS_CLOSE and frees up the buffers
     void close()
     {
+        if (curl == null)
+            return;
+        
         status = 0;
         
         // Send close notification
