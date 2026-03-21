@@ -582,24 +582,21 @@ enum
 
 version (DynamicBinding)
 {
-    __gshared
+    extern (C) __gshared
     {
         const(char)* function() curl_version;
 
         CURLcode function(c_long flags) curl_global_init;
 
-        extern (C) // DMD really needs this extern for this function... DON'T ASK WHY
         curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
         void function(curl_slist *list) curl_slist_free_all;
 
         CURL* function() curl_easy_init;
         const(char)* function(CURLcode) curl_easy_strerror;
         CURL* function(CURL *handle) curl_easy_duphandle;
-        extern (C)
         CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
         CURLcode function(CURL *easy_handle) curl_easy_perform;
         void function(CURL *handle) curl_easy_cleanup;
-        extern (C)
         CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
 
         CURLcode function(CURL *curl,
