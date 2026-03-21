@@ -18,6 +18,18 @@ enum // Bitflag for WebSocket
     WEBSOCKET_ACTIVE = 1,
 }
 
+version (Windows)
+{
+    // WSAPoll was added to druntime's winsock2 bindings recently;
+    // older versions may not have it, so we define our own.
+    private import core.sys.windows.winsock2 : SOCKET;
+    private struct ws_pollfd { SOCKET fd; short events; short revents; }
+    private enum short WS_POLLIN = 0x0300, WS_POLLOUT = 0x0010,
+        WS_POLLERR = 0x0001, WS_POLLHUP = 0x0002, WS_POLLNVAL = 0x0004;
+    pragma(lib, "ws2_32");
+    private extern (Windows) int WSAPoll(ws_pollfd* fdArray, uint fds, int timeout) @nogc;
+}
+
 /// Represents an active WebSocket connection.
 struct WebSocket
 {
@@ -201,7 +213,12 @@ private:
     
     version (Windows)
     {
-        import core.sys.windows.winsock2 : pollfd, WSAPoll, POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL;
+        alias pollfd  = ws_pollfd;
+        alias POLLIN  = WS_POLLIN;
+        alias POLLOUT = WS_POLLOUT;
+        alias POLLERR = WS_POLLERR;
+        alias POLLHUP = WS_POLLHUP;
+        alias POLLNVAL = WS_POLLNVAL;
         alias syspoll = WSAPoll;
     }
     else
@@ -230,7 +247,7 @@ private:
         pfd.events = events;
 
         int ret = syspoll(&pfd, 1, pollTimeout);
-        if (ret == -1)
+        if (ret < 0)
             throw new Exception(cast(string)fromStringz( strerror(errno) ));
         if (ret == 0)
             throw new CurlException("WebSocket poll timed out");
