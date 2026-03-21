@@ -695,11 +695,15 @@ else version (StaticBinding)
 else
     static assert(0, "Either StaticBinding or DynamicBinding must be specified");
 
+/// Utility function to get error message from code. (Also used internally)
+/// Returns: Error message.
 string curlErrorMessage(CURLcode code)
 {
     return cast(string)fromStringz( curl_easy_strerror(code) );
 }
 
+/// Utility function to get curl (only) version.
+/// Returns: Version, like "8.14.1".
 string curlVersion()
 {
     curlLoad();
@@ -721,7 +725,7 @@ string curlVersion()
     return verstring[firstslash+1..$]; // Return only version number
 }
 
-// Functions to help setting options
+// Internal functions to help setting options
 package
 static
 void curl_set_option(CURL *curl, CURLoption option, void *value,
