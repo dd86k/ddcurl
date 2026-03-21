@@ -10,6 +10,8 @@ import std.string;
 import ddcurl.libcurl;
 import ddlogger;
 
+// NOTE: WebSocket struct allows to make multiple connections using a single WSClient
+
 private
 enum // Bitflag for WebSocket
 {
@@ -195,7 +197,7 @@ private:
     //       we temporarily sleep the thread, to let the socket do its things.
     // TODO: Use select(3) as noted from example.
     //       But that's not generally available easily, at least from D.
-    //       And curl does not provide a function to do that easily, cool!
+    //       And curl does not provide a wrapper function to do that easily, cool!
     //       There are the receive and send situations in here.
     import core.thread : Thread, dur, Duration;
     static immutable Duration sleeptime = dur!"msecs"(100);
@@ -205,7 +207,6 @@ private:
 alias WebSocketConnection = WebSocket;
 
 /// High-level representation of a WebSocket client.
-deprecated("Use HTTPClient.websocket")
 class WebSocketClient
 {
     this()
@@ -213,44 +214,55 @@ class WebSocketClient
         curlLoad(); // Depends on libcurl
     }
     
-    // add default header to requests
+    /// Add header to all future connections.
     typeof(this) addHeader(string name, string value)
     {
         headers[name] = value;
         return this;
     }
     
+    /// Set peer verification option.
     typeof(this) setVerifyPeers(bool v)
     {
-        curlVerifyPeers = cast(long)v;
+        curlVerifyPeers = cast(c_long)v;
         return this;
     }
     
+    /// Set CURL's verbose flag.
     typeof(this) setVerbose(bool v)
     {
-        curlVerbose = cast(long)v;
+        curlVerbose = cast(c_long)v;
         return this;
     }
     
-    // ws://, wss://
-    void connect(string url, void delegate(ref WebSocketConnection) dg)
+    /// Connect to a WebSocket.
+    ///
+    /// Protocols: ws://, wss://
+    /// Returns: WebSocket connection.
+    WebSocket connect(string url)
     {
         assert(url);
-        assert(dg);
-        
+
+        // Dynamic binding loads ws functions optionally; they may be null
+        version (DynamicBinding)
+        {
+            if (curl_ws_recv == null || curl_ws_send == null)
+                throw new Exception("WebSockets are unavailable");
+        }
+
         // Open connection
-        curl = curl_easy_init();
+        CURL *curl = curl_easy_init();
         if (curl == null)
             throw new CurlException("curl_easy_init failed");
-        
+
         curl_set_option(curl, CURLOPT_URL, url.toStringz());
         curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
         curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
         curl_set_option(curl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
         curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
-        
+
         // Set headers
-        curl_slist *slist_headers;
+        curl_slist *curl_headers;
         if (headers.length)
         {
             foreach (key, value; headers)
@@ -258,32 +270,27 @@ class WebSocketClient
                 char[256] buffer = void;
                 char[] header = sformat(buffer, "%s: %s", key, value);
                 
-                slist_headers = curl_slist_append(slist_headers, toStringz( header ));
-                if (slist_headers == null)
+                curl_slist *temp = curl_slist_append(curl_headers, header.toStringz());
+                if (temp == null)
+                {
+                    curl_slist_free_all(curl_headers);
                     throw new CurlException("curl_slist_append failed");
+                }
+                curl_headers = temp;
             }
-            
-            curl_set_option(curl, CURLOPT_HTTPHEADER, slist_headers);
+
+            curl_set_option(curl, CURLOPT_HTTPHEADER, curl_headers);
         }
-        
-        // Perform HTTP call with upgrade
+
+        // Perform HTTP call, curl manages the upgrade
         CURLcode code = curl_easy_perform(curl);
         if (code)
             throw new CurlException(code);
-        
-        // Call user delegate
-        WebSocketConnection ws = WebSocketConnection(curl);
-        dg(ws);
-        
-        // If we had headers, clear them
-        if (slist_headers)
-            curl_slist_free_all(slist_headers);
-        
-        curl_easy_cleanup(curl);
+
+        return WebSocket(curl, curl_headers);
     }
     
 private:
-    CURL *curl;
     c_long curlVerifyPeers = 1;
     c_long curlVerbose;
 
@@ -295,14 +302,15 @@ unittest
 {
     static immutable string wsurl = "wss://echo.websocket.org"; // echos whatever sent
     WebSocketClient wsclient = new WebSocketClient();
-    wsclient.connect(wsurl, (ref WebSocketConnection ws) {
-        writeln("ws init: ", cast(string)ws.receive());
-        
-        writeln("ws sending: ", "test hello");
-        ws.send("test hello");
-        
-        Thread.sleep(1.seconds);
-        
-        writeln("ws receiving: ", cast(string)ws.receive());
-    });
+    WebSocket ws = wsclient.connect(wsurl);
+    
+    writeln("ws init: ", cast(string)ws.receive());
+    
+    writeln("ws sending: ", "test hello");
+    ws.send("test hello");
+    
+    Thread.sleep(1.seconds);
+    
+    writeln("ws receiving: ", cast(string)ws.receive());
+    ws.close();
 }
