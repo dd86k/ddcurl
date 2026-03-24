@@ -1,0 +1,14 @@
+name "tests"
+
+targetType "library"
+targetPath ".."
+
+dependency "ddcurl" path=".." version="*"
+
+configuration "dynamic" {
+    subConfiguration "ddcurl" "dynamic"
+}
+
+configuration "static" {
+    subConfiguration "ddcurl" "static"
+}

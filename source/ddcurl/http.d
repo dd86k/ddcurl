@@ -73,6 +73,21 @@ class HTTPClient
     {
         curlLoad(); // Depends on libcurl
     }
+
+    ~this()
+    {
+        close();
+    }
+
+    /// Clean up the persistent curl handle and write cookies to the jar file.
+    void close()
+    {
+        if (curl)
+        {
+            curl_easy_cleanup(curl);
+            curl = null;
+        }
+    }
     
     /// Set CURL's verbose flag.
     /// Params: verbose = When enabled, CURL outputs information via stderr.
@@ -146,6 +161,29 @@ class HTTPClient
         return this;
     }
     
+    /// Enable in-memory cookie handling.
+    ///
+    /// Cookies received via Set-Cookie headers are stored and sent on
+    /// subsequent requests. Cookies are not persisted to disk.
+    typeof(this) enableCookies()
+    {
+        cookieFile = "";
+        return this;
+    }
+
+    /// Set a cookie jar file for persistent cookies.
+    ///
+    /// Cookies are read from the file at the start and written back on close.
+    /// Also enables in-memory cookie handling for the session.
+    /// Params:
+    ///   path = File path. The file is created if it does not exist.
+    typeof(this) setCookieJar(string path)
+    {
+        cookieFile = path;
+        cookieJar = path;
+        return this;
+    }
+
     /// Get the value set of a previously set header field name.
     /// Params:
     ///   name = Header field name.
@@ -162,16 +200,16 @@ class HTTPClient
     HTTPResponse get(string path = null) // TODO: get parameters
     {
         string canon = canonicalPath(path);
-        
+
         logDebugging("GET %s", canon);
         
-        CURL *curl = curl_easy_init();
-        if (curl == null)
-            throw new CurlException("curl_easy_init returned null");
+        initHandle();
+        // Helps when previous call was a POST
+        curl_set_option(curl, CURLOPT_POST, 0);
         
-        return send(curl, canon);
+        return send(canon);
     }
-    
+
     /// Perform a POST request.
     ///
     /// Best used with HTTPPostData to help with encoding POST HTML forms.
@@ -182,13 +220,11 @@ class HTTPClient
     HTTPResponse post(string path = null, string payload = null)
     {
         string canon = canonicalPath(path);
-        
+
         logDebugging("POST %s (%u bytes)", canon, payload.length);
-        
-        CURL *curl = curl_easy_init();
-        if (curl == null)
-            throw new CurlException("curl_easy_init returned null");
-        
+
+        initHandle();
+
         // Set POST option
         curl_set_option(curl, CURLOPT_POST, 1);
         
@@ -207,7 +243,7 @@ class HTTPClient
             curl_set_option(curl, CURLOPT_POSTFIELDSIZE, 0);
         }
         
-        return send(curl, canon);
+        return send(canon);
     }
     
     // perform a post request with an associative array payload
@@ -251,37 +287,42 @@ class HTTPClient
                 throw new Exception("WebSockets are unavailable");
         }
         
-        // Open connection
-        CURL *curl = curl_easy_init();
-        if (curl == null)
+        // WebSocket needs its own handle (CONNECT_ONLY mode)
+        CURL *wscurl = curl_easy_init();
+        if (wscurl == null)
             throw new CurlException("curl_easy_init failed");
         
         // Merge base path if available
         string path = canonicalPath(url);
         
-        curl_set_option(curl, CURLOPT_URL, path.toStringz());
-        curl_set_option(curl, CURLOPT_CONNECT_ONLY, 2); // WS style
-        curl_set_option(curl, CURLOPT_MAXREDIRS, curlMaxRedirects);
-        curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
-        curl_set_option(curl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
-        curl_set_option(curl, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
-        curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
+        curl_set_option(wscurl, CURLOPT_URL, path.toStringz());
+        curl_set_option(wscurl, CURLOPT_CONNECT_ONLY, 2); // WS style
+        curl_set_option(wscurl, CURLOPT_MAXREDIRS, curlMaxRedirects);
+        curl_set_option(wscurl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
+        curl_set_option(wscurl, CURLOPT_SSL_VERIFYHOST, curlVerifyPeers);
+        curl_set_option(wscurl, CURLOPT_TIMEOUT_MS, curlTimeoutMs);
+        curl_set_option(wscurl, CURLOPT_VERBOSE, curlVerbose);
         
         // Add headers
-        curl_slist *curl_headers = addAllHeaders(curl);
+        curl_slist *curl_headers = addAllHeaders(wscurl);
         
         // Perform HTTP call, curl manages the upgrade
-        CURLcode code = curl_easy_perform(curl);
+        CURLcode code = curl_easy_perform(wscurl);
         if (code)
             throw new CurlException(code);
         
-        return WebSocket(curl, curl_headers);
+        return WebSocket(wscurl, curl_headers);
     }
     
 private:
+    CURL *curl;
     string userAgent;
     string baseUrl;
     string[string] headers;
+    
+    // Cookie support
+    string cookieFile; // null = disabled, "" = in-memory only, path = file
+    string cookieJar;  // null = disabled, path = write cookies on cleanup
     
     char[CURL_ERROR_SIZE] error_buffer;
     
@@ -290,6 +331,17 @@ private:
     c_long curlTimeoutMs = 10_000;
     c_long curlVerifyPeers = 1;
     MemoryBuffer memorybuf;
+    
+    // Initialize the persistent curl handle (lazy)
+    void initHandle()
+    {
+        if (curl == null)
+        {
+            curl = curl_easy_init();
+            if (curl == null)
+                throw new CurlException("curl_easy_init returned null");
+        }
+    }
     
     // Get the actual full path
     string canonicalPath(string suffix)
@@ -305,14 +357,14 @@ private:
     }
     
     // Add headers and return slist to be freed later
-    curl_slist* addAllHeaders(CURL *curl)
+    curl_slist* addAllHeaders(CURL *handle)
     {
         // No headers to add, nothing to free later
         if (headers.length == 0)
             return null;
         
         // Required
-        curl_set_option(curl, CURLOPT_ERRORBUFFER, error_buffer.ptr);
+        curl_set_option(handle, CURLOPT_ERRORBUFFER, error_buffer.ptr);
         
         curl_slist *curl_headers;
         foreach (key, value; headers)
@@ -332,12 +384,12 @@ private:
         }
         
         if (curl_headers)
-            curl_set_option(curl, CURLOPT_HTTPHEADER, curl_headers);
+            curl_set_option(handle, CURLOPT_HTTPHEADER, curl_headers);
         
         return curl_headers;
     }
     
-    HTTPResponse send(CURL *curl, string path)
+    HTTPResponse send(string path)
     {
         assert(curl);
         assert(path);
@@ -347,6 +399,7 @@ private:
         // Set options
         curl_set_option(curl, CURLOPT_URL, path.toStringz());
         curl_set_option(curl, CURLOPT_TCP_KEEPALIVE, 1); // forgot what this fixes
+        curl_set_option(curl, CURLOPT_FOLLOWLOCATION, cast(c_long)(curlMaxRedirects != 0));
         curl_set_option(curl, CURLOPT_MAXREDIRS, curlMaxRedirects);
         curl_set_option(curl, CURLOPT_VERBOSE, curlVerbose);
         curl_set_option(curl, CURLOPT_SSL_VERIFYPEER, curlVerifyPeers);
@@ -357,6 +410,12 @@ private:
         // Set read function with user pointer
         curl_set_option(curl, CURLOPT_WRITEFUNCTION, &readResponse);
         curl_set_option(curl, CURLOPT_WRITEDATA, this);
+        
+        // Cookie handling
+        if (cookieFile !is null)
+            curl_set_option(curl, CURLOPT_COOKIEFILE, cookieFile.toStringz());
+        if (cookieJar !is null)
+            curl_set_option(curl, CURLOPT_COOKIEJAR, cookieJar.toStringz());
         
         // Add headers
         curl_slist *curl_headers = addAllHeaders(curl);
@@ -377,10 +436,9 @@ private:
         if (code)
             throw new CurlException(code);
         
-        // Cleanup
+        // Cleanup headers only (handle stays alive)
         if (curl_headers)
             curl_slist_free_all(curl_headers);
-        curl_easy_cleanup(curl);
         
         // Make up response, memory buffer holds its own memory buffer that
         // it copied from reading the response

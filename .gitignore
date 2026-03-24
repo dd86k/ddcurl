@@ -4,7 +4,9 @@ __dummy.html
 docs/
 /ddcurl
 /ddcurl_client
+/ddcurl_tests
 ddcurl-test-*
+ddcurl-tests-*
 *.so
 *.dylib
 *.dll

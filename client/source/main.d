@@ -55,9 +55,8 @@ void main(string[] args)
         quit(1);
     }
     
-    scope HTTPClient client = new HTTPClient();
-    if (oinsecure)
-        client.setVerifyPeers(false);
+    scope HTTPClient client = new HTTPClient()
+        .setVerifyPeers(oinsecure);
     
     if (oheaders)
     {

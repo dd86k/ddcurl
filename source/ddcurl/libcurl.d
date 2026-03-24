@@ -597,6 +597,7 @@ version (DynamicBinding)
         CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
         CURLcode function(CURL *easy_handle) curl_easy_perform;
         void function(CURL *handle) curl_easy_cleanup;
+        void function(CURL *handle) curl_easy_reset;
         CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
 
         CURLcode function(CURL *curl,
@@ -628,6 +629,7 @@ version (DynamicBinding)
 
         libraryBind(lib, cast(void**)&curl_easy_cleanup,   "curl_easy_cleanup");
         libraryBind(lib, cast(void**)&curl_easy_duphandle, "curl_easy_duphandle");
+        libraryBind(lib, cast(void**)&curl_easy_reset,     "curl_easy_reset");
         libraryBind(lib, cast(void**)&curl_easy_getinfo,   "curl_easy_getinfo");
         libraryBind(lib, cast(void**)&curl_easy_init,      "curl_easy_init");
         libraryBind(lib, cast(void**)&curl_easy_perform,   "curl_easy_perform");
@@ -665,6 +667,7 @@ else version (StaticBinding)
         CURLcode curl_easy_setopt(CURL *handle, CURLoption option, ...);
         CURLcode curl_easy_perform(CURL *easy_handle);
         void curl_easy_cleanup(CURL *handle);
+        void curl_easy_reset(CURL *handle);
         CURLcode curl_easy_getinfo(CURL *curl, CURLINFO info, ...);
 
         CURLcode curl_ws_recv(CURL *curl,

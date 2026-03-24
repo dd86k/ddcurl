@@ -17,3 +17,4 @@ configuration "static" {
 }
 
 subPackage "client"
+subPackage "tests"
