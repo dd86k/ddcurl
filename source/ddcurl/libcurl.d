@@ -4,9 +4,9 @@ module ddcurl.libcurl;
 import core.stdc.config : c_long;
 import std.string;
 import std.conv : text;
-version (DynamicBinding)
-    import ddloader;
+version (DynamicBinding) import ddloader;
 
+// NOTE: CurlException does not clean CURL* handles
 class CurlException : Exception
 {
     // Via code
@@ -23,14 +23,25 @@ class CurlException : Exception
         string _file = __FILE__, size_t _line = __LINE__)
     {
         import core.stdc.string : strlen;
-        size_t l = strlen(buf.ptr);
         // If we have a length, slice it.
         // Otherwise, generic message. (We probably forgot to set the option)
+        size_t l = strlen(buf.ptr);
         string m = l ? buf[0..l].idup : "A curl error happened";
         super(m, _file, _line);
         code = 0;
     }
     
+    // Via code + curl handle (extracts HTTP status)
+    // Notably useful for code 22
+    this(CURLcode _code, CURL *curl,
+        string _file = __FILE__, size_t _line = __LINE__)
+    {
+        code = _code;
+        statusCode = getHTTPStatus(curl);
+        string m = text(curlErrorMessage(_code), " (code: ", _code, ", HTTP: ", statusCode,")");
+        super(m, _file, _line);
+    }
+
     // Generic message, when all else fails
     this(string message,
         string _file = __FILE__, size_t _line = __LINE__)
@@ -38,9 +49,23 @@ class CurlException : Exception
         super(message, _file, _line);
         code = 0; // No codes available here
     }
-    
+
     /// Original CURL code
     CURLcode code;
+
+    /// HTTP status code, if available. Zero means unavailable.
+    int statusCode;
+
+private:
+    static int getHTTPStatus(CURL *curl)
+    {
+        if (curl == null)
+            return 0;
+        c_long httpCode;
+        if (curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode))
+            return 0;
+        return cast(int)httpCode;
+    }
 }
 
 //

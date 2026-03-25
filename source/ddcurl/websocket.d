@@ -350,7 +350,7 @@ class WebSocketClient
         // Perform HTTP call, curl manages the upgrade
         CURLcode code = curl_easy_perform(curl);
         if (code)
-            throw new CurlException(code);
+            throw new CurlException(code, curl);
 
         return WebSocket(curl, curl_headers);
     }

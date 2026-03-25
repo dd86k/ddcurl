@@ -309,8 +309,8 @@ class HTTPClient
         // Perform HTTP call, curl manages the upgrade
         CURLcode code = curl_easy_perform(wscurl);
         if (code)
-            throw new CurlException(code);
-        
+            throw new CurlException(code, wscurl);
+
         return WebSocket(wscurl, curl_headers);
     }
     
