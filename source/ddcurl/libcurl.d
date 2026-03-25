@@ -750,6 +750,16 @@ string curlVersion()
     return verstring[firstslash+1..$]; // Return only version number
 }
 
+/// Utility function to get curl (only) version.
+/// Returns: Full version string.
+string curlVersionFull()
+{
+    curlLoad();
+    
+    // "libcurl/VERSION other/VERSION" etc.
+    return cast(string)fromStringz( curl_version() );
+}
+
 // Internal functions to help setting options
 package
 static
