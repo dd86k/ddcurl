@@ -246,6 +246,128 @@ class HTTPClient
         return send(canon);
     }
     
+    /// Perform a PUT request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    ///   payload = Payload. Can be empty.
+    /// Returns: HTTP response.
+    HTTPResponse put(string path = null, string payload = null)
+    {
+        string canon = canonicalPath(path);
+
+        logDebugging("PUT %s (%u bytes)", canon, payload.length);
+
+        initHandle();
+
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, "PUT".ptr);
+
+        if (payload)
+        {
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, payload.length);
+            curl_set_option(curl, CURLOPT_POSTFIELDS,    payload.ptr);
+        }
+        else
+        {
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, 0);
+        }
+
+        HTTPResponse response = send(canon);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, cast(const(char)*) null);
+        return response;
+    }
+
+    /// Perform a PATCH request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    ///   payload = Payload. Can be empty.
+    /// Returns: HTTP response.
+    HTTPResponse patch(string path = null, string payload = null)
+    {
+        string canon = canonicalPath(path);
+
+        logDebugging("PATCH %s (%u bytes)", canon, payload.length);
+
+        initHandle();
+
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, "PATCH".ptr);
+
+        if (payload)
+        {
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, payload.length);
+            curl_set_option(curl, CURLOPT_POSTFIELDS,    payload.ptr);
+        }
+        else
+        {
+            curl_set_option(curl, CURLOPT_POSTFIELDSIZE, 0);
+        }
+
+        HTTPResponse response = send(canon);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, cast(const(char)*) null);
+        return response;
+    }
+
+    /// Perform a DELETE request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    /// Returns: HTTP response.
+    HTTPResponse del(string path = null)
+    {
+        string canon = canonicalPath(path);
+
+        logDebugging("DELETE %s", canon);
+
+        initHandle();
+
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, "DELETE".ptr);
+
+        HTTPResponse response = send(canon);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, cast(const(char)*) null);
+        return response;
+    }
+
+    /// Perform a HEAD request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    /// Returns: HTTP response (text will be empty, only code is meaningful).
+    HTTPResponse head(string path = null)
+    {
+        string canon = canonicalPath(path);
+
+        logDebugging("HEAD %s", canon);
+
+        initHandle();
+
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_NOBODY, 1);
+
+        HTTPResponse response = send(canon);
+        curl_set_option(curl, CURLOPT_NOBODY, 0);
+        return response;
+    }
+
+    /// Perform an OPTIONS request.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    /// Returns: HTTP response.
+    HTTPResponse options(string path = null)
+    {
+        string canon = canonicalPath(path);
+
+        logDebugging("OPTIONS %s", canon);
+
+        initHandle();
+
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, "OPTIONS".ptr);
+
+        HTTPResponse response = send(canon);
+        curl_set_option(curl, CURLOPT_CUSTOMREQUEST, cast(const(char)*) null);
+        return response;
+    }
+
     // perform a post request with an associative array payload
     /*
     HTTPResponse post(string path, ...)
