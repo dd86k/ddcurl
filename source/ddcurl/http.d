@@ -65,6 +65,7 @@ struct HTTPResponse
 {
     int code;
     string text;
+    string[string] headers; /// Response headers (original casing preserved).
 }
 
 class HTTPClient
@@ -440,19 +441,20 @@ private:
     CURL *curl;
     string userAgent;
     string baseUrl;
-    string[string] headers;
+    string[string] headers; // request headers
     
     // Cookie support
     string cookieFile; // null = disabled, "" = in-memory only, path = file
     string cookieJar;  // null = disabled, path = write cookies on cleanup
     
     char[CURL_ERROR_SIZE] error_buffer;
-    
+
     c_long curlVerbose;
     c_long curlMaxRedirects = 5;
     c_long curlTimeoutMs = 10_000;
     c_long curlVerifyPeers = 1;
     MemoryBuffer memorybuf;
+    string[string] respHeaders; // Collected during send().
     
     // Initialize the persistent curl handle (lazy)
     void initHandle()
@@ -532,6 +534,10 @@ private:
         // Set read function with user pointer
         curl_set_option(curl, CURLOPT_WRITEFUNCTION, &readResponse);
         curl_set_option(curl, CURLOPT_WRITEDATA, this);
+
+        // Capture response headers
+        curl_set_option(curl, CURLOPT_HEADERFUNCTION, &readHeader);
+        curl_set_option(curl, CURLOPT_HEADERDATA, this);
         
         // Cookie handling
         if (cookieFile !is null)
@@ -548,6 +554,7 @@ private:
         
         // Perform request
         memorybuf.reset();
+        respHeaders = null;
         CURLcode code = curl_easy_perform(curl);
         if (code)
             throw new CurlException(code);
@@ -566,7 +573,8 @@ private:
         // it copied from reading the response
         HTTPResponse response = HTTPResponse(
             cast(int)response_code,
-            memorybuf.toString()
+            memorybuf.toString(),
+            respHeaders,
         );
         return response;
     }
@@ -587,5 +595,40 @@ size_t readResponse(void *ptr, size_t size, size_t nmemb, void *userdata)
     size_t realsize = size * nmemb;
     HTTPClient client = cast(HTTPClient)userdata;
     client.memorybuf.append(ptr, realsize);
+    return realsize;
+}
+
+/// Called once per response header line (including status line and trailing CRLF).
+private
+extern (C)
+size_t readHeader(void *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    if (ptr == null || size == 0 || nmemb == 0)
+        return 0;
+    
+    size_t realsize = size * nmemb;
+    HTTPClient client = cast(HTTPClient)userdata;
+    
+    import std.string : indexOf, stripRight;
+
+    const(char)[] line = (cast(const(char)*)ptr)[0 .. realsize];
+    
+    line = stripRight(line); // // Strip trailing \r\n.
+
+    // Skip empty lines and HTTP status lines (e.g. "HTTP/1.1 200 OK").
+    if (line.length == 0 || (line.length >= 5 && line[0 .. 5] == "HTTP/"))
+        return realsize;
+
+    // Find ": " separator.
+    ptrdiff_t colon = indexOf(line, ':');
+    if (colon <= 0)
+        return realsize;
+
+    // Value starts after ": " (skip colon and optional space).
+    size_t vstart = colon + 1;
+    if (vstart < line.length && line[vstart] == ' ')
+        vstart++;
+
+    client.respHeaders[line[0 .. colon].idup] = line[vstart .. $].idup;
     return realsize;
 }
