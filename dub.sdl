@@ -13,9 +13,9 @@ configuration "dynamic" {
 
 configuration "static" {
     versions "StaticBinding"
-    libs "libcurl-arm64" version="windows-aarch64"
-    libs "libcurl-x64" version="windows-x86_64"
-    libs "curl" version="posix"
+    libs "libcurl-arm64" platform="windows-aarch64"
+    libs "libcurl-x64" platform="windows-x86_64"
+    libs "curl" platform="posix"
 }
 
 subPackage "client"
