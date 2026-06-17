@@ -607,32 +607,49 @@ enum
 
 version (DynamicBinding)
 {
-    extern (C) __gshared
+    extern (C)
     {
-        const(char)* function() curl_version;
+        alias fn_curl_version           = const(char)* function();
+        alias fn_curl_global_init       = CURLcode function(c_long flags);
+        alias fn_curl_slist_append      = curl_slist* function(curl_slist *list, const(char) *string_);
+        alias fn_curl_slist_free_all    = void function(curl_slist *list);
+        alias fn_curl_easy_init         = CURL* function();
+        alias fn_curl_easy_strerror     = const(char)* function(CURLcode);
+        alias fn_curl_easy_duphandle    = CURL* function(CURL *handle);
+        alias fn_curl_easy_setopt       = CURLcode function(CURL *handle, CURLoption option, ...);
+        alias fn_curl_easy_perform      = CURLcode function(CURL *easy_handle);
+        alias fn_curl_easy_cleanup      = void function(CURL *handle);
+        alias fn_curl_easy_reset        = void function(CURL *handle);
+        alias fn_curl_easy_getinfo      = CURLcode function(CURL *curl, CURLINFO info, ...);
+        alias fn_curl_ws_recv =
+            CURLcode function(CURL *curl,
+                void *buffer, size_t buflen,
+                size_t *recv, curl_ws_frame **metap);
+        alias fn_curl_ws_send =
+            CURLcode function(CURL *curl, const void *buffer,
+                size_t buflen, size_t *sent,
+                curl_off_t fragsize,
+                uint flags);
+    }
+    
+    __gshared // D mangled names since DMD exports dynamic symbols
+    {
+        fn_curl_version         curl_version;
+        fn_curl_global_init     curl_global_init;
+        fn_curl_slist_append    curl_slist_append;
+        fn_curl_slist_free_all  curl_slist_free_all;
 
-        CURLcode function(c_long flags) curl_global_init;
+        fn_curl_easy_init       curl_easy_init;
+        fn_curl_easy_strerror   curl_easy_strerror;
+        fn_curl_easy_duphandle  curl_easy_duphandle;
+        fn_curl_easy_setopt     curl_easy_setopt;
+        fn_curl_easy_perform    curl_easy_perform;
+        fn_curl_easy_cleanup    curl_easy_cleanup;
+        fn_curl_easy_reset      curl_easy_reset;
+        fn_curl_easy_getinfo    curl_easy_getinfo;
 
-        curl_slist* function(curl_slist *list, const(char) *string_) curl_slist_append;
-        void function(curl_slist *list) curl_slist_free_all;
-
-        CURL* function() curl_easy_init;
-        const(char)* function(CURLcode) curl_easy_strerror;
-        CURL* function(CURL *handle) curl_easy_duphandle;
-        CURLcode function(CURL *handle, CURLoption option, ...) curl_easy_setopt;
-        CURLcode function(CURL *easy_handle) curl_easy_perform;
-        void function(CURL *handle) curl_easy_cleanup;
-        void function(CURL *handle) curl_easy_reset;
-        CURLcode function(CURL *curl, CURLINFO info, ...) curl_easy_getinfo;
-
-        CURLcode function(CURL *curl,
-            void *buffer, size_t buflen,
-            size_t *recv, curl_ws_frame **metap) curl_ws_recv;
-
-        CURLcode function(CURL *curl, const void *buffer,
-            size_t buflen, size_t *sent,
-            curl_off_t fragsize,
-            uint flags) curl_ws_send;
+        fn_curl_ws_recv curl_ws_recv;
+        fn_curl_ws_send curl_ws_send;
     }
 
     private __gshared
