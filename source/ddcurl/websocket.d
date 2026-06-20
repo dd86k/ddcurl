@@ -32,8 +32,9 @@ enum WebSocketStatus
     data,
     /// The connection was closed by the peer (or already closed locally).
     closed,
-    /// The poll timed out with no data ready. This is an ordinary idle
-    /// condition: pace a heartbeat and call receive again.
+    /// The poll timed out before the frame completed. This is an ordinary idle
+    /// condition: any bytes already received are retained and resumed on the
+    /// next receive call, so pace a heartbeat and call receive again.
     timedOut,
 }
 
@@ -116,11 +117,12 @@ struct WebSocket
         if (curl == null)
             return WebSocketMessage(null, WebSocketStatus.closed);
 
-        size_t total;
+        // recvTotal persists across calls: a frame interrupted by an idle
+        // timeout is held and resumed on the next receive() instead of lost.
         size_t rdsize = void;
     Lread:
-        size_t bufleft = bufsize - total;
-        CURLcode code = curl_ws_recv(curl, buffer + total, bufleft, &rdsize, &curl_frame);
+        size_t bufleft = bufsize - recvTotal;
+        CURLcode code = curl_ws_recv(curl, buffer + recvTotal, bufleft, &rdsize, &curl_frame);
         if (curl_frame)
         {
             with (curl_frame)
@@ -145,25 +147,28 @@ struct WebSocket
             throw new CurlException(code);
         }
 
-        total += rdsize;
-        logTrace("Frame: %u / %u bytes", total, bufsize);
-        
+        recvTotal += rdsize;
+        logTrace("Frame: %u / %u bytes", recvTotal, bufsize);
+
         // Incomplete frame
         if (curl_frame.bytesleft > 0)
         {
-            if (total + curl_frame.bytesleft >= bufsize)
+            if (recvTotal + curl_frame.bytesleft >= bufsize)
             {
-                size_t newsize = total + curl_frame.bytesleft;
+                size_t newsize = recvTotal + curl_frame.bytesleft;
                 buffer = realloc(buffer, newsize);
                 if (buffer == null)
                     throw new CurlException("realloc failed");
                 bufsize = newsize;
             }
-            
+
             goto Lread;
         }
-        
-        return WebSocketMessage(cast(ubyte[])buffer[0..total], WebSocketStatus.data);
+
+        // Complete frame: hand it over and reset for the next one.
+        ubyte[] data = cast(ubyte[])buffer[0..recvTotal];
+        recvTotal = 0;
+        return WebSocketMessage(data, WebSocketStatus.data);
     }
     
     /// Send text data (CURLWS_TEXT).
@@ -237,6 +242,7 @@ struct WebSocket
         if (buffer) free(buffer);
         buffer  = null;
         bufsize = 0;
+        recvTotal = 0;
         
         // Cleanup headers
         if (curl_headers)
@@ -262,6 +268,7 @@ private:
     
     void *buffer;
     size_t bufsize;
+    size_t recvTotal; // Bytes of the in-progress frame; persists across receive() calls
     int status;
     int sockfd = -1;
     int pollTimeout = 10_000;
