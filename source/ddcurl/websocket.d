@@ -105,6 +105,8 @@ struct WebSocket
         close();
     }
     
+    @disable this(this);
+    
     /// Receive data.
     /// Returns: A WebSocketMessage whose status indicates whether a frame was
     /// received, the connection closed, or the poll timed out while idle.
