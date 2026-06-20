@@ -12,6 +12,46 @@ import ddlogger;
 
 // NOTE: WebSocket struct allows to make multiple connections using a single WSClient
 
+/// Thrown when a poll lapses with no data ready while sending. Receiving reports
+/// an idle timeout as an ordinary WebSocketMessage status instead (see
+/// WebSocket.receive), but send has no tristate return, so a stalled send still
+/// surfaces here. It subclasses CurlException so existing broad handlers keep
+/// working.
+class WebSocketTimeoutException : CurlException
+{
+    this(string message, string _file = __FILE__, size_t _line = __LINE__)
+    {
+        super(message, _file, _line);
+    }
+}
+
+/// Outcome of a WebSocket.receive call.
+enum WebSocketStatus
+{
+    /// A frame was received; its bytes are in WebSocketMessage.data.
+    data,
+    /// The connection was closed by the peer (or already closed locally).
+    closed,
+    /// The poll timed out with no data ready. This is an ordinary idle
+    /// condition: pace a heartbeat and call receive again.
+    timedOut,
+}
+
+/// Result of a WebSocket.receive call.
+struct WebSocketMessage
+{
+    /// Received bytes. Non-null only when status is WebSocketStatus.data.
+    ubyte[] data;
+    /// Why receive returned.
+    WebSocketStatus status;
+
+    /// Returns: true when a frame was received.
+    bool ok() const
+    {
+        return status == WebSocketStatus.data;
+    }
+}
+
 private
 enum // Bitflag for WebSocket
 {
@@ -65,16 +105,17 @@ struct WebSocket
     }
     
     /// Receive data.
-    /// Returns: Buffer. If empty (null), then connection was closed.
-    ubyte[] receive()
+    /// Returns: A WebSocketMessage whose status indicates whether a frame was
+    /// received, the connection closed, or the poll timed out while idle.
+    WebSocketMessage receive()
     {
         assert(curl,    "curl==null");
         assert(buffer,  "buffer==null");
         assert(bufsize, "bufsize==0");
-        
+
         if (curl == null)
-            return null;
-        
+            return WebSocketMessage(null, WebSocketStatus.closed);
+
         size_t total;
         size_t rdsize = void;
     Lread:
@@ -85,24 +126,25 @@ struct WebSocket
             with (curl_frame)
             logTrace("curl_ws_recv: code=%d curl_ws_frame { age=%d flags=%x offset=%d left=%d len=%u }",
                 code, age, flags, offset, bytesleft, len);
-            
+
             // Closing
             if (curl_frame.flags & CURLWS_CLOSE)
             {
                 close();
-                return null;
+                return WebSocketMessage(null, WebSocketStatus.closed);
             }
         }
-        
+
         switch (code) {
         case CURLE_OK: break;
         case CURLE_AGAIN:
-            pollSocket(POLLIN);
+            if (pollSocket(POLLIN) == false)
+                return WebSocketMessage(null, WebSocketStatus.timedOut);
             goto Lread;
         default:
             throw new CurlException(code);
         }
-        
+
         total += rdsize;
         logTrace("Frame: %u / %u bytes", total, bufsize);
         
@@ -121,7 +163,7 @@ struct WebSocket
             goto Lread;
         }
         
-        return cast(ubyte[])buffer[0..total];
+        return WebSocketMessage(cast(ubyte[])buffer[0..total], WebSocketStatus.data);
     }
     
     /// Send text data (CURLWS_TEXT).
@@ -159,7 +201,8 @@ struct WebSocket
         switch (code) {
         case CURLE_OK: break;
         case CURLE_AGAIN:
-            pollSocket(POLLOUT);
+            if (pollSocket(POLLOUT) == false)
+                throw new WebSocketTimeoutException("WebSocket send timed out");
             goto Lsend;
         default:
             throw new CurlException(code);
@@ -252,7 +295,8 @@ private:
     }
     
     // Poll the socket until it is ready for the given events (POLLIN or POLLOUT).
-    void pollSocket(short events)
+    // Returns: true when the socket is ready, false when the poll timed out.
+    bool pollSocket(short events)
     {
         pollfd pfd;
         pfd.fd = sockfd;
@@ -261,10 +305,9 @@ private:
         int ret = syspoll(&pfd, 1, pollTimeout);
         if (ret < 0)
             throw new Exception(cast(string)fromStringz( strerror(errno) ));
-        if (ret == 0)
-            throw new CurlException("WebSocket poll timed out");
         if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
             throw new CurlException("WebSocket poll error");
+        return ret > 0;
     }
 }
 
@@ -369,13 +412,13 @@ unittest
     WebSocketClient wsclient = new WebSocketClient();
     WebSocket ws = wsclient.connect(wsurl);
     
-    writeln("ws init: ", cast(string)ws.receive());
-    
+    writeln("ws init: ", cast(string)ws.receive().data);
+
     writeln("ws sending: ", "test hello");
     ws.send("test hello");
-    
+
     Thread.sleep(1.seconds);
-    
-    writeln("ws receiving: ", cast(string)ws.receive());
+
+    writeln("ws receiving: ", cast(string)ws.receive().data);
     ws.close();
 }
