@@ -45,6 +45,10 @@ struct WebSocketMessage
     ubyte[] data;
     /// Why receive returned.
     WebSocketStatus status;
+    /// RFC 6455 close status code, set only when status is
+    /// WebSocketStatus.closed and the peer sent a 2-byte code in the CLOSE
+    /// frame payload. Zero when the peer closed without a code.
+    ushort closeCode;
 
     /// Returns: true when a frame was received.
     bool ok() const
@@ -134,8 +138,17 @@ struct WebSocket
             // Closing
             if (curl_frame.flags & CURLWS_CLOSE)
             {
+                // The CLOSE payload, if present, starts with a 2-byte
+                // big-endian status code (RFC 6455 5.5.1). A code-less close
+                // leaves closeCode at zero.
+                ushort closeCode;
+                if (rdsize >= 2)
+                {
+                    ubyte *p = cast(ubyte*)buffer + recvTotal;
+                    closeCode = cast(ushort)((p[0] << 8) | p[1]);
+                }
                 close();
-                return WebSocketMessage(null, WebSocketStatus.closed);
+                return WebSocketMessage(null, WebSocketStatus.closed, closeCode);
             }
         }
 
