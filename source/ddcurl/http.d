@@ -184,7 +184,23 @@ class HTTPClient
         cookieJar = path;
         return this;
     }
-
+    
+    /// Write the in-memory cookies to the cookie jar file immediately,
+    /// without tearing down the connection.
+    ///
+    /// Requires a cookie jar to have been set via setCookieJar. Does
+    /// nothing if no handle exists yet or no jar is configured.
+    /// Returns: true on success, false if there was nothing to flush.
+    bool flushCookies()
+    {
+        if (curl is null || cookieJar is null)
+            return false;
+        // "FLUSH" tells libcurl to write all known cookies to the
+        // file set with CURLOPT_COOKIEJAR.
+        curl_set_option(curl, CURLOPT_COOKIELIST, cast(char*)"FLUSH".ptr);
+        return true;
+    }
+    
     /// Get the value set of a previously set header field name.
     /// Params:
     ///   name = Header field name.
