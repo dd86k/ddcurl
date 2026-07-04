@@ -61,11 +61,67 @@ private:
     OutBuffer buffer;
 }
 
+/// One part of a multipart/form-data body.
+struct MimePart
+{
+    string name;          /// Form field name.
+    string value;         /// Text fields: field value.
+    const(ubyte)[] data;  /// File fields: file content.
+    string filename;      /// File fields: remote filename. Null means text field.
+    string contentType;   /// File fields: MIME type (e.g. "image/png").
+}
+
+/// Builder for a multipart/form-data request body.
+///
+/// Used with HTTPClient.postMultipart.
+class MultipartForm
+{
+    /// Add a text field.
+    /// Params:
+    ///   name = Form field name.
+    ///   value = Field value.
+    typeof(this) addField(string name, string value)
+    {
+        MimePart part;
+        part.name = name;
+        part.value = value;
+        parts ~= part;
+        return this;
+    }
+
+    /// Add a file field.
+    /// Params:
+    ///   name = Form field name.
+    ///   filename = Remote filename sent in the part header.
+    ///   contentType = MIME type of the content (e.g. "image/png").
+    ///   data = File content.
+    typeof(this) addFile(string name, string filename, string contentType, const(ubyte)[] data)
+    {
+        MimePart part;
+        part.name = name;
+        part.filename = filename;
+        part.contentType = contentType;
+        part.data = data;
+        parts ~= part;
+        return this;
+    }
+
+package:
+    MimePart[] parts;
+}
+
 struct HTTPResponse
 {
     int code;
     string text;
     string[string] headers; /// Response headers (original casing preserved).
+
+    /// Response body as raw bytes. The body is stored as-is; this is a
+    /// reinterpreting slice for binary responses (images, archives, etc.).
+    const(ubyte)[] bytes() const
+    {
+        return cast(const(ubyte)[])text;
+    }
 }
 
 class HTTPClient
@@ -260,6 +316,82 @@ class HTTPClient
             curl_set_option(curl, CURLOPT_POSTFIELDSIZE, 0);
         }
         
+        return send(canon);
+    }
+    
+    /// Perform a POST request with a multipart/form-data body.
+    ///
+    /// libcurl generates the boundary and Content-Type header itself.
+    /// Params:
+    ///   path = Full or postfix URL path.
+    ///   form = Multipart form body.
+    /// Returns: HTTP response.
+    HTTPResponse postMultipart(string path, MultipartForm form)
+    {
+        // Dynamic binding loads mime functions optionally; they may be null
+        // (mime API is available since libcurl 7.56)
+        version (DynamicBinding)
+        {
+            if (curl_mime_init == null)
+                throw new Exception("Multipart is unavailable");
+        }
+
+        string canon = canonicalPath(path);
+
+        logDebugging("POST %s (multipart, %u parts)", canon, form.parts.length);
+
+        initHandle();
+
+        curl_mime *mime = curl_mime_init(curl);
+        if (mime == null)
+            throw new CurlException("curl_mime_init returned null");
+        scope (exit)
+        {
+            // Detach the body from the handle before freeing it so a later
+            // request cannot reference freed memory
+            curl_set_option(curl, CURLOPT_MIMEPOST, cast(void*)null);
+            curl_mime_free(mime);
+        }
+
+        foreach (ref MimePart p; form.parts)
+        {
+            curl_mimepart *part = curl_mime_addpart(mime);
+            if (part == null)
+                throw new CurlException("curl_mime_addpart returned null");
+
+            CURLcode mcode = curl_mime_name(part, p.name.toStringz());
+            if (mcode)
+                throw new CurlException(mcode);
+
+            if (p.filename) // File field
+            {
+                // curl_mime_data copies the content
+                mcode = curl_mime_data(part, cast(const(char)*)p.data.ptr, p.data.length);
+                if (mcode)
+                    throw new CurlException(mcode);
+                mcode = curl_mime_filename(part, p.filename.toStringz());
+                if (mcode)
+                    throw new CurlException(mcode);
+                if (p.contentType)
+                {
+                    mcode = curl_mime_type(part, p.contentType.toStringz());
+                    if (mcode)
+                        throw new CurlException(mcode);
+                }
+            }
+            else // Text field
+            {
+                mcode = curl_mime_data(part,
+                    p.value.length ? p.value.ptr : "".ptr, p.value.length);
+                if (mcode)
+                    throw new CurlException(mcode);
+            }
+        }
+
+        // CURLOPT_MIMEPOST implies POST
+        curl_set_option(curl, CURLOPT_POST, 0);
+        curl_set_option(curl, CURLOPT_MIMEPOST, mime);
+
         return send(canon);
     }
     

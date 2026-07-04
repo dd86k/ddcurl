@@ -96,8 +96,12 @@ version (DynamicBinding)
 
 struct CURL;
 struct curl_slist; // @suppress(dscanner.style.phobos_naming_convention)
+struct curl_mime;  // @suppress(dscanner.style.phobos_naming_convention)
+struct curl_mimepart; // @suppress(dscanner.style.phobos_naming_convention)
 
 alias curl_off_t = long;
+
+enum size_t CURL_ZERO_TERMINATED = cast(size_t)-1;
 
 struct curl_ws_frame // @suppress(dscanner.style.phobos_naming_convention)
 {
@@ -630,6 +634,13 @@ version (DynamicBinding)
                 size_t buflen, size_t *sent,
                 curl_off_t fragsize,
                 uint flags);
+        alias fn_curl_mime_init     = curl_mime* function(CURL *easy);
+        alias fn_curl_mime_free     = void function(curl_mime *mime);
+        alias fn_curl_mime_addpart  = curl_mimepart* function(curl_mime *mime);
+        alias fn_curl_mime_name     = CURLcode function(curl_mimepart *part, const(char) *name);
+        alias fn_curl_mime_data     = CURLcode function(curl_mimepart *part, const(char) *data, size_t datasize);
+        alias fn_curl_mime_filename = CURLcode function(curl_mimepart *part, const(char) *filename);
+        alias fn_curl_mime_type     = CURLcode function(curl_mimepart *part, const(char) *mimetype);
     }
     
     __gshared // D mangled names since DMD exports dynamic symbols
@@ -650,6 +661,14 @@ version (DynamicBinding)
 
         fn_curl_ws_recv curl_ws_recv;
         fn_curl_ws_send curl_ws_send;
+
+        fn_curl_mime_init       curl_mime_init;
+        fn_curl_mime_free       curl_mime_free;
+        fn_curl_mime_addpart    curl_mime_addpart;
+        fn_curl_mime_name       curl_mime_name;
+        fn_curl_mime_data       curl_mime_data;
+        fn_curl_mime_filename   curl_mime_filename;
+        fn_curl_mime_type       curl_mime_type;
     }
 
     private __gshared
@@ -682,6 +701,20 @@ version (DynamicBinding)
         {
             libraryBind(lib, cast(void**)&curl_ws_recv,    "curl_ws_recv");
             libraryBind(lib, cast(void**)&curl_ws_send,    "curl_ws_send");
+        }
+        catch (Exception)
+        {
+        }
+
+        try // optional (mime API since libcurl 7.56)
+        {
+            libraryBind(lib, cast(void**)&curl_mime_init,     "curl_mime_init");
+            libraryBind(lib, cast(void**)&curl_mime_free,     "curl_mime_free");
+            libraryBind(lib, cast(void**)&curl_mime_addpart,  "curl_mime_addpart");
+            libraryBind(lib, cast(void**)&curl_mime_name,     "curl_mime_name");
+            libraryBind(lib, cast(void**)&curl_mime_data,     "curl_mime_data");
+            libraryBind(lib, cast(void**)&curl_mime_filename, "curl_mime_filename");
+            libraryBind(lib, cast(void**)&curl_mime_type,     "curl_mime_type");
         }
         catch (Exception)
         {
@@ -720,6 +753,14 @@ else version (StaticBinding)
             size_t buflen, size_t *sent,
             curl_off_t fragsize,
             uint flags);
+
+        curl_mime* curl_mime_init(CURL *easy);
+        void curl_mime_free(curl_mime *mime);
+        curl_mimepart* curl_mime_addpart(curl_mime *mime);
+        CURLcode curl_mime_name(curl_mimepart *part, const(char) *name);
+        CURLcode curl_mime_data(curl_mimepart *part, const(char) *data, size_t datasize);
+        CURLcode curl_mime_filename(curl_mimepart *part, const(char) *filename);
+        CURLcode curl_mime_type(curl_mimepart *part, const(char) *mimetype);
     }
 
     private __gshared bool _initialized;
