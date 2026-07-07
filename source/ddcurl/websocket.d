@@ -168,12 +168,23 @@ struct WebSocket
         // Incomplete frame
         if (curl_frame.bytesleft > 0)
         {
-            if (recvTotal + curl_frame.bytesleft >= bufsize)
+            // BUG: long type promotion with recvTotal + curl_frame.bytesleft
+            //      On 32-bit targets, because curl_off_t is aliased to long,
+            //      a type promotion is attempted to from size_t (uint) recvTotal.
+            //      Safety check:
+            //      - Assumes curl_frame.bytesleft > 0 (positive integer) for cast
+            //      - Explicit cast forces a rule
+            //      Unchecked:
+            //      - If curl_frame.bytesleft >= uint.max (other problems by then)
+            size_t left = cast(size_t)curl_frame.bytesleft;
+            
+            if (recvTotal + left >= bufsize)
             {
-                size_t newsize = recvTotal + curl_frame.bytesleft;
-                buffer = realloc(buffer, newsize);
-                if (buffer == null)
+                size_t newsize = recvTotal + left;
+                void *temp = realloc(buffer, newsize);
+                if (temp == null)
                     throw new CurlException("realloc failed");
+                buffer = temp;
                 bufsize = newsize;
             }
 
