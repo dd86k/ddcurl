@@ -631,9 +631,16 @@ private:
     // Add headers and return slist to be freed later
     curl_slist* addAllHeaders(CURL *handle)
     {
-        // No headers to add, nothing to free later
+        // No headers to add, nothing to free later. Still clear the option:
+        // the handle is persistent and reused, and send() frees the previous
+        // request's slist after each perform. Leaving CURLOPT_HTTPHEADER
+        // pointing at that freed slist is a use-after-free that re-sends stale
+        // headers, so explicitly drop any custom headers here.
         if (headers.length == 0)
+        {
+            curl_set_option(handle, CURLOPT_HTTPHEADER, cast(void*)null);
             return null;
+        }
         
         // Required
         curl_set_option(handle, CURLOPT_ERRORBUFFER, error_buffer.ptr);
