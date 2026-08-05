@@ -218,6 +218,29 @@ class HTTPClient
         return this;
     }
     
+    /// Enable or disable transparent content compression.
+    ///
+    /// Enabled by default: requests advertise every content encoding this
+    /// libcurl build supports (gzip, deflate, and depending on the build,
+    /// br and zstd) and libcurl decompresses the body before it reaches
+    /// HTTPResponse.text.
+    ///
+    /// Note that the response Content-Encoding and Content-Length headers
+    /// still describe the compressed body, while text and bytes hold the
+    /// decompressed one. Disable this if the raw body is wanted.
+    ///
+    /// Setting an Accept-Encoding header manually with addHeader takes
+    /// precedence and leaves the body compressed, since libcurl only
+    /// decodes what it advertised itself.
+    /// Params:
+    ///   enabled = True to accept and decompress compressed responses.
+    typeof(this) setAcceptEncoding(bool enabled)
+    {
+        // "" asks libcurl for everything it supports, null disables it
+        acceptEncoding = enabled ? "" : null;
+        return this;
+    }
+
     /// Enable in-memory cookie handling.
     ///
     /// Cookies received via Set-Cookie headers are stored and sent on
@@ -601,6 +624,7 @@ private:
     c_long curlMaxRedirects = 5;
     c_long curlTimeoutMs = 10_000;
     c_long curlVerifyPeers = 1;
+    string acceptEncoding = ""; // null = disabled, "" = every supported encoding
     MemoryBuffer memorybuf;
     string[string] respHeaders; // Collected during send().
     
@@ -626,6 +650,17 @@ private:
             return baseUrl;
         else // Neither is set
             throw new Exception("Path is empty and BaseURL is unset");
+    }
+    
+    // Check if a request header was set, regardless of its casing
+    bool hasHeader(string name)
+    {
+        foreach (key, value; headers)
+        {
+            if (icmp(key, name) == 0)
+                return true;
+        }
+        return false;
     }
     
     // Add headers and return slist to be freed later
@@ -693,6 +728,14 @@ private:
         // Capture response headers
         curl_set_option(curl, CURLOPT_HEADERFUNCTION, &readHeader);
         curl_set_option(curl, CURLOPT_HEADERDATA, this);
+        
+        // Content compression. A caller-supplied Accept-Encoding header wins
+        // over this option in libcurl, and libcurl refuses to decode what it
+        // did not advertise itself, so leave the option off in that case
+        // instead of handing back a body we claim is decompressed.
+        curl_set_option(curl, CURLOPT_ACCEPT_ENCODING,
+            acceptEncoding !is null && hasHeader("Accept-Encoding") == false ?
+                acceptEncoding.toStringz() : cast(const(char)*)null);
         
         // Cookie handling
         if (cookieFile !is null)
