@@ -81,9 +81,10 @@ version (DynamicBinding)
     version (Windows)
     {
         private immutable string[] curlname = [
-            "libcurl-x64.dll",
-            "libcurl-arm64.dll",
-            "libcurl.dll",
+            "libcurl-x64.dll",   // curl.se name
+            "libcurl-arm64.dll", // curl.se name
+            "libcurl-4.dll",     // msys2/mingw
+            "libcurl.dll",       // typically 32-bit, etc.
         ];
     }
     else version (Posix)
