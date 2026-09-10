@@ -3,7 +3,7 @@ module ddcurl.websocket;
 
 import core.stdc.stdlib : malloc, realloc, free;
 import core.stdc.string : memcpy, strerror;
-import core.stdc.errno  : errno;
+import core.stdc.errno  : errno, EINTR;
 import core.stdc.config : c_long;
 import std.format;
 import std.string;
@@ -335,9 +335,15 @@ private:
         pfd.fd = sockfd;
         pfd.events = events;
 
+    Lpoll:
         int ret = syspoll(&pfd, 1, pollTimeout);
         if (ret < 0)
+        {
+            // D stops the world with signals, so a GC on another thread
+            // interrupts a blocking poll(). EINTR is not a failure.
+            version (Posix) if (errno == EINTR) goto Lpoll;
             throw new Exception(cast(string)fromStringz( strerror(errno) ));
+        }
         if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
             throw new CurlException("WebSocket poll error");
         return ret > 0;
