@@ -5,6 +5,7 @@ import core.stdc.stdlib : malloc, realloc, free;
 import core.stdc.string : memcpy, strerror;
 import core.stdc.errno  : errno, EINTR;
 import core.stdc.config : c_long;
+import core.time : MonoTime, msecs;
 import std.format;
 import std.string;
 import ddcurl.libcurl;
@@ -126,6 +127,11 @@ struct WebSocket
         // recvTotal persists across calls: a frame interrupted by an idle
         // timeout is held and resumed on the next receive() instead of lost.
         size_t rdsize = void;
+        // One deadline for the whole call rather than a fresh poll per wake:
+        // a peer that PINGs more often than the timeout would otherwise keep
+        // receive() from ever returning, and the caller from ever sending.
+        MonoTime deadline = MonoTime.currTime + msecs(pollTimeout);
+        bool woke;
     Lread:
         size_t bufleft = bufsize - recvTotal;
         CURLcode code = curl_ws_recv(curl, buffer + recvTotal, bufleft, &rdsize, &curl_frame);
@@ -153,10 +159,20 @@ struct WebSocket
         }
 
         switch (code) {
-        case CURLE_OK: break;
+        case CURLE_OK:
+            // libcurl answers PINGs itself; neither they nor PONGs are messages.
+            if (curl_frame && curl_frame.flags & (CURLWS_PING | CURLWS_PONG))
+                goto Lread;
+            break;
         case CURLE_AGAIN:
-            if (pollSocket(POLLIN) == false)
+            // Readable but no frame: a control frame libcurl kept to itself,
+            // TLS housekeeping, or a partial record.
+            if (woke)
+                logTrace("curl_ws_recv: woke without a frame");
+            long left = (deadline - MonoTime.currTime).total!"msecs";
+            if (left <= 0 || pollSocket(POLLIN, cast(int)left) == false)
                 return WebSocketMessage(null, WebSocketStatus.timedOut);
+            woke = true;
             goto Lread;
         default:
             throw new CurlException(code);
@@ -232,7 +248,7 @@ struct WebSocket
         switch (code) {
         case CURLE_OK: break;
         case CURLE_AGAIN:
-            if (pollSocket(POLLOUT) == false)
+            if (pollSocket(POLLOUT, pollTimeout) == false)
                 throw new WebSocketTimeoutException("WebSocket send timed out");
             goto Lsend;
         default:
@@ -329,14 +345,14 @@ private:
     
     // Poll the socket until it is ready for the given events (POLLIN or POLLOUT).
     // Returns: true when the socket is ready, false when the poll timed out.
-    bool pollSocket(short events)
+    bool pollSocket(short events, int timeout)
     {
         pollfd pfd;
         pfd.fd = sockfd;
         pfd.events = events;
 
     Lpoll:
-        int ret = syspoll(&pfd, 1, pollTimeout);
+        int ret = syspoll(&pfd, 1, timeout);
         if (ret < 0)
         {
             // D stops the world with signals, so a GC on another thread
