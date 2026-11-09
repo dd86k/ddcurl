@@ -7,7 +7,7 @@ license "ISC"
 dependency "ddlogger" repository="git+https://github.com/dd86k/ddlogger.git" version="4397d8e57a88bd6b3a3e5e4c846ba97ac3bfd364"
 
 configuration "dynamic" {
-    dependency "ddloader" repository="git+https://github.com/dd86k/ddloader.git" version="c3eb54d31a17e63a7722f8449033ce13764b7636"
+    dependency "ddloader" repository="git+https://github.com/dd86k/ddloader.git" version="9c3d572db435df9614628bb7665875044ae03261"
     versions "DynamicBinding"
 }
 
