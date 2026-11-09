@@ -4,7 +4,7 @@ authors "dd86k <dd@dax.moe>"
 copyright "Copyright © 2025, dd86k <dd@dax.moe>"
 license "ISC"
 
-dependency "ddlogger" repository="git+https://github.com/dd86k/ddlogger.git" version="4397d8e57a88bd6b3a3e5e4c846ba97ac3bfd364"
+dependency "ddlogger" repository="git+https://github.com/dd86k/ddlogger.git" version="dcab663a80d496c1d3c7fee4c406ed7f763e5fdb"
 
 configuration "dynamic" {
     dependency "ddloader" repository="git+https://github.com/dd86k/ddloader.git" version="9c3d572db435df9614628bb7665875044ae03261"
